@@ -39,8 +39,15 @@
           }
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+      "expo-font",
+      {
+        "fonts": ["./assets/images/fonts/InstrumentSerif-Regular.ttf"]
+      }
+    ]
     ],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
