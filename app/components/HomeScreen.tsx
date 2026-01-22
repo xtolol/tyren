@@ -1,16 +1,19 @@
-import { VideoView, useVideoPlayer } from 'expo-video';
-import React, { useEffect } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
-import NavBar from './NavBar';
-import ProgressBar from './ProgressBar';
+import { VideoView, useVideoPlayer } from "expo-video";
+import React, { useEffect } from "react";
+import { Dimensions, StyleSheet, View } from "react-native";
+import NavBar from "./NavBar";
+import ProgressBar from "./ProgressBar";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('screen');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("screen");
 
 export default function HomeScreen() {
-  const player = useVideoPlayer(require('@/assets/images/videos/1.mp4'), (player) => {
-    player.loop = true;
-    player.muted = true;
-  });
+  const player = useVideoPlayer(
+    require("@/assets/images/videos/1.mp4"),
+    (player) => {
+      player.loop = true;
+      player.muted = true;
+    },
+  );
 
   useEffect(() => {
     player.play();
@@ -34,19 +37,19 @@ export default function HomeScreen() {
         nativeControls={false}
       />
       <NavBar />
-      <ProgressBar/>
+      <ProgressBar />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'column',
-    backgroundColor: 'black',
+    flexDirection: "column",
+    backgroundColor: "black",
     gap: 24,
   },
   backgroundVideo: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -55,3 +58,4 @@ const styles = StyleSheet.create({
     height: SCREEN_HEIGHT,
   },
 });
+
