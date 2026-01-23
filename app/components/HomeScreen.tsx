@@ -2,7 +2,6 @@ import InventoryIcon from "@/assets/images/inventory-32px.svg";
 import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
 import { useFonts } from "expo-font";
-import { LinearGradient } from "expo-linear-gradient";
 import { VideoView, useVideoPlayer } from "expo-video";
 import React, { useEffect } from "react";
 import {
@@ -12,10 +11,39 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
+
 import NavBar from "./NavBar";
 import ProgressBar from "./ProgressBar";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("screen");
+
+// Radial Gradient Component
+function RadialGradientButton() {
+  return (
+    <Svg
+      width="100%"
+      height="100%"
+      style={{ position: "absolute", top: 0, left: 0 }}
+    >
+      <Defs>
+        <RadialGradient id="radial" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+          <Stop offset="0%" stopColor="#004156" />
+          <Stop offset="100%" stopColor="#00222D" />
+        </RadialGradient>
+      </Defs>
+      <Rect
+        x="0"
+        y="0"
+        width="100%"
+        height="100%"
+        rx="100"
+        ry="100"
+        fill="url(#radial)"
+      />
+    </Svg>
+  );
+}
 
 export default function HomeScreen() {
   const [fontsLoaded] = useFonts({
@@ -38,7 +66,7 @@ export default function HomeScreen() {
           player.pause();
         }
       } catch (error) {
-        // Player may have already been cleaned up by useVideoPlayer hook
+        // Player may have already been cleaned up
       }
     };
   }, [player]);
@@ -68,20 +96,48 @@ export default function HomeScreen() {
           >
             <ShopIcon width={32} height={32} />
           </TouchableOpacity>
+
+          {/* Focus Time Button with Radial Gradient */}
           <TouchableOpacity
             style={styles.textButton}
             onPress={() => console.log("Focus Time pressed")}
             activeOpacity={0.8}
           >
-            <LinearGradient
-              colors={["#004156", "#00222D"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.gradientContainer}
-            >
+            <View style={styles.gradientContainer}>
+              <Svg
+                width="100%"
+                height="100%"
+                viewBox="0 0 200 50"
+                style={{ position: "absolute" }}
+              >
+                <Defs>
+                  <RadialGradient
+                    id="radial"
+                    cx="50%"
+                    cy="5%"
+                    r="50%"
+                    fx="50%"
+                    fy="0%"
+                    gradientTransform="scale(1, 1.6)"
+                  >
+                    <Stop offset="0%" stopColor="#004156" />
+                    <Stop offset="100%" stopColor="#00222D" />
+                  </RadialGradient>
+                </Defs>
+                <Rect
+                  x="0"
+                  y="0"
+                  width="200"
+                  height="50"
+                  rx="25"
+                  ry="25"
+                  fill="url(#radial)"
+                />
+              </Svg>
               <Text style={styles.buttonText}>Focus Time</Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => console.log("Inventory pressed")}
@@ -110,13 +166,6 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
   },
-  placeholder: {
-    width: "100%",
-    paddingHorizontal: 16,
-    height: 124,
-    backgroundColor: "yellow",
-    alignSelf: "center",
-  },
   bottomContainer: {
     gap: 24,
     paddingHorizontal: 16,
@@ -125,6 +174,12 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     justifyContent: "flex-end",
     alignItems: "center",
+  },
+  levelContainer: {
+    width: "100%",
+    alignItems: "center",
+    flexDirection: "column",
+    justifyContent: "center",
   },
   shareContainer: {
     width: "100%",
@@ -138,12 +193,6 @@ const styles = StyleSheet.create({
     fontWeight: "regular",
     fontFamily: "InstrumentSerif-Regular",
     color: "white",
-  },
-  levelContainer: {
-    width: "100%",
-    alignItems: "center",
-    flexDirection: "column",
-    justifyContent: "center",
   },
   levelnumber: {
     fontSize: 16,
@@ -162,23 +211,19 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "stretch", // Stretch to match parent/sibling height
     backgroundColor: "#1A1A1A",
     borderRadius: 100,
-    // Add any additional styling you want (background, border, etc.)
   },
   textButton: {
     flex: 1,
     borderRadius: 100,
-    alignSelf: "stretch", // Stretch to match parent/sibling height
-    overflow: "hidden", // Important for rounded corners with gradient
+    alignSelf: "stretch",
+    overflow: "hidden", // important for rounded corners
   },
   gradientContainer: {
     flex: 1,
-    alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    width: "100%",
+    alignItems: "center",
   },
   buttonText: {
     color: "white",
@@ -187,4 +232,3 @@ const styles = StyleSheet.create({
     fontFamily: "OpenSans",
   },
 });
-
