@@ -107,7 +107,7 @@ export default function HomeScreen() {
               <Svg
                 width="100%"
                 height="100%"
-                viewBox="0 0 200 50"
+                viewBox="0 0 200 64"
                 style={{ position: "absolute" }}
               >
                 <Defs>
@@ -128,9 +128,9 @@ export default function HomeScreen() {
                   x="0"
                   y="0"
                   width="200"
-                  height="50"
-                  rx="25"
-                  ry="25"
+                  height="64"
+                  rx="32"
+                  ry="32"
                   fill="url(#radial)"
                 />
               </Svg>
@@ -204,21 +204,21 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "center",
-    gap: 16,
+    justifyContent: "space-between",
+    height: 64,
   },
   iconButton: {
-    padding: 12,
+    height: 64,
+    width: 64,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#1A1A1A",
     borderRadius: 100,
   },
   textButton: {
-    flex: 1,
-    borderRadius: 100,
-    alignSelf: "stretch",
-    overflow: "hidden", // important for rounded corners
+    height: 64,
+    width: 200,
+    borderRadius: 32,
   },
   gradientContainer: {
     flex: 1,
