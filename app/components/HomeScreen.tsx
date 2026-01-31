@@ -4,7 +4,7 @@ import ShopIcon from "@/assets/images/shop-32px.svg";
 import { useFocusTimer } from "@/src/hooks/useFocusTimer";
 import { useFonts } from "expo-font";
 import { VideoView, useVideoPlayer } from "expo-video";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   StyleSheet,
@@ -14,6 +14,9 @@ import {
 } from "react-native";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
+import InventoryBottomSheet, {
+  InventoryBottomSheetRef,
+} from "./InventoryBottomSheet";
 import NavBar from "./NavBar";
 import ProgressBar from "./ProgressBar";
 
@@ -47,31 +50,26 @@ function RadialGradientButton() {
 }
 
 export default function HomeScreen() {
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const inventorySheetRef = useRef<InventoryBottomSheetRef>(null);
   const [fontsLoaded] = useFonts({
     "InstrumentSerif-Regular": require("@/assets/images/fonts/InstrumentSerif-Regular.ttf"),
   });
 
-  const { isRunning, progress, stop, startFreeform } = useFocusTimer();
+  function handleInventoryPress() {
+    setIsInventoryOpen(true);
+  }
 
-  const [displayedProgress, setDisplayedProgress] = useState(0);
-
-  const handleToggle = () => {
-    if (isRunning) {
-      // Stop the timer and commit progress
-      const finalProgress = Math.round(progress);
-      stop();
-      setDisplayedProgress((prev) => Math.min(100, prev + finalProgress));
-    } else {
-      startFreeform();
-    }
-  };
+  function handleInventoryClose() {
+    setIsInventoryOpen(false);
+  }
 
   const player = useVideoPlayer(
     require("@/assets/images/videos/1.mp4"),
     (player) => {
       player.loop = true;
       player.muted = true;
-    },
+    }
   );
 
   useEffect(() => {
@@ -158,12 +156,17 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => console.log("Inventory pressed")}
+            onPress={() => handleInventoryPress()}
           >
             <InventoryIcon width={32} height={32} />
           </TouchableOpacity>
         </View>
       </View>
+      <InventoryBottomSheet
+        ref={inventorySheetRef}
+        isOpen={isInventoryOpen}
+        onClose={handleInventoryClose}
+      />
     </View>
   );
 }
