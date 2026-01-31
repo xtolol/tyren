@@ -1,9 +1,10 @@
 import InventoryIcon from "@/assets/images/inventory-32px.svg";
 import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
+import { useFocusTimer } from "@/src/hooks/useFocusTimer";
 import { useFonts } from "expo-font";
 import { VideoView, useVideoPlayer } from "expo-video";
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Dimensions,
   StyleSheet,
@@ -50,6 +51,21 @@ export default function HomeScreen() {
     "InstrumentSerif-Regular": require("@/assets/images/fonts/InstrumentSerif-Regular.ttf"),
   });
 
+  const { isRunning, progress, stop, startFreeform } = useFocusTimer();
+
+  const [displayedProgress, setDisplayedProgress] = useState(0);
+
+  const handleToggle = () => {
+    if (isRunning) {
+      // Stop the timer and commit progress
+      const finalProgress = Math.round(progress);
+      stop();
+      setDisplayedProgress((prev) => Math.min(100, prev + finalProgress));
+    } else {
+      startFreeform();
+    }
+  };
+
   const player = useVideoPlayer(
     require("@/assets/images/videos/1.mp4"),
     (player) => {
@@ -80,7 +96,7 @@ export default function HomeScreen() {
         nativeControls={false}
       />
       <NavBar />
-      <ProgressBar />
+      <ProgressBar percentage={displayedProgress} />
       <View style={styles.bottomContainer}>
         <View style={styles.levelContainer}>
           <View style={styles.shareContainer}>
@@ -100,7 +116,7 @@ export default function HomeScreen() {
           {/* Focus Time Button with Radial Gradient */}
           <TouchableOpacity
             style={styles.textButton}
-            onPress={() => console.log("Focus Time pressed")}
+            onPress={handleToggle}
             activeOpacity={0.8}
           >
             <View style={styles.gradientContainer}>
@@ -134,7 +150,9 @@ export default function HomeScreen() {
                   fill="url(#radial)"
                 />
               </Svg>
-              <Text style={styles.buttonText}>Focus Time</Text>
+              <Text style={styles.buttonText}>
+                {isRunning ? "Stop" : "Focus Time"}
+              </Text>
             </View>
           </TouchableOpacity>
 

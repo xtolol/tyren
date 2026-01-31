@@ -6,7 +6,7 @@ import { Dimensions, StyleSheet, Text, TouchableOpacity } from "react-native";
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
-function polarToCartesian(cx, cy, r, angle) {
+function polarToCartesian(cx: number, cy: number, r: number, angle: number) {
   const a = (angle * Math.PI) / 180; // SVG 0° is →, top is -90°
   return {
     x: cx + r * Math.cos(a),
@@ -15,7 +15,7 @@ function polarToCartesian(cx, cy, r, angle) {
 }
 
 // Generate arc path
-function describeArc(cx, cy, r, startAngle, endAngle) {
+function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
   const start = polarToCartesian(cx, cy, r, startAngle);
   const end = polarToCartesian(cx, cy, r, endAngle);
   const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
