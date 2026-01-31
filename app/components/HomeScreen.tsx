@@ -3,7 +3,7 @@ import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
 import { useFonts } from "expo-font";
 import { VideoView, useVideoPlayer } from "expo-video";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   StyleSheet,
@@ -13,6 +13,9 @@ import {
 } from "react-native";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
+import InventoryBottomSheet, {
+  InventoryBottomSheetRef,
+} from "./InventoryBottomSheet";
 import NavBar from "./NavBar";
 import ProgressBar from "./ProgressBar";
 
@@ -46,16 +49,26 @@ function RadialGradientButton() {
 }
 
 export default function HomeScreen() {
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const inventorySheetRef = useRef<InventoryBottomSheetRef>(null);
   const [fontsLoaded] = useFonts({
     "InstrumentSerif-Regular": require("@/assets/images/fonts/InstrumentSerif-Regular.ttf"),
   });
+
+  function handleInventoryPress() {
+    setIsInventoryOpen(true);
+  }
+
+  function handleInventoryClose() {
+    setIsInventoryOpen(false);
+  }
 
   const player = useVideoPlayer(
     require("@/assets/images/videos/1.mp4"),
     (player) => {
       player.loop = true;
       player.muted = true;
-    },
+    }
   );
 
   useEffect(() => {
@@ -140,12 +153,17 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => console.log("Inventory pressed")}
+            onPress={() => handleInventoryPress()}
           >
             <InventoryIcon width={32} height={32} />
           </TouchableOpacity>
         </View>
       </View>
+      <InventoryBottomSheet
+        ref={inventorySheetRef}
+        isOpen={isInventoryOpen}
+        onClose={handleInventoryClose}
+      />
     </View>
   );
 }
