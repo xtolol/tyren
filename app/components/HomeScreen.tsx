@@ -17,6 +17,7 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import InventoryBottomSheet, {
   InventoryBottomSheetRef,
 } from "./InventoryBottomSheet";
+import ShopBottomSheet, { ShopBottomSheetRef } from "./ShopBottomSheet";
 import NavBar from "./NavBar";
 import ProgressBar from "./ProgressBar";
 
@@ -51,7 +52,9 @@ function RadialGradientButton() {
 
 export default function HomeScreen() {
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isShopOpen, setIsShopOpen] = useState(false);
   const inventorySheetRef = useRef<InventoryBottomSheetRef>(null);
+  const shopSheetRef = useRef<ShopBottomSheetRef>(null);
   const [fontsLoaded] = useFonts({
     "InstrumentSerif-Regular": require("@/assets/images/fonts/InstrumentSerif-Regular.ttf"),
   });
@@ -59,17 +62,37 @@ export default function HomeScreen() {
   function handleInventoryPress() {
     setIsInventoryOpen(true);
   }
+  function handleShopPress() {
+    setIsShopOpen(true);
+  }
 
   function handleInventoryClose() {
     setIsInventoryOpen(false);
   }
+  function handleShopClose() {
+    setIsShopOpen(false);
+  }
+
+  const { isRunning, progress, stop, startFreeform } = useFocusTimer();
+  const [displayedProgress, setDisplayedProgress] = useState(0);
+
+  const handleToggle = () => {
+    if (isRunning) {
+      // Stop the timer and commit progress
+      const finalProgress = Math.round(progress);
+      stop();
+      setDisplayedProgress((prev) => Math.min(100, prev + finalProgress));
+    } else {
+      startFreeform();
+    }
+  };
 
   const player = useVideoPlayer(
     require("@/assets/images/videos/1.mp4"),
     (player) => {
       player.loop = true;
       player.muted = true;
-    }
+    },
   );
 
   useEffect(() => {
@@ -106,7 +129,7 @@ export default function HomeScreen() {
         <View style={styles.botbuttonsContainer}>
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => console.log("Shop pressed")}
+            onPress={() => handleShopPress()}
           >
             <ShopIcon width={32} height={32} />
           </TouchableOpacity>
@@ -166,6 +189,11 @@ export default function HomeScreen() {
         ref={inventorySheetRef}
         isOpen={isInventoryOpen}
         onClose={handleInventoryClose}
+      />
+      <ShopBottomSheet
+        ref={shopSheetRef}
+        isOpen={isShopOpen}
+        onClose={handleShopClose}
       />
     </View>
   );

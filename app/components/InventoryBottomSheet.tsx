@@ -1,8 +1,10 @@
 import BoostIcon from "@/assets/images/booster-48px.svg";
-import Chainbreaker from "@/assets/images/chainbreaker-48px.svg";
-import GoldPass from "@/assets/images/goldpass-48px.svg";
+import Chainbreaker from "@/assets/images/chainbreaker-48px-grey.png";
+import GoldPass from "@/assets/images/goldpass-48px-grey.png";
 import RightArrowIcon from "@/assets/images/right-32px.svg";
 import CloseIcon from "@/assets/images/x-24px.svg";
+
+import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
 import GridCell from "./GridCell";
 
@@ -19,6 +21,7 @@ import React, {
 } from "react";
 import {
   Dimensions,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -41,6 +44,9 @@ const InventoryBottomSheet = React.forwardRef<
   InventoryBottomSheetRef,
   InventoryBottomSheetProps
 >(({ isOpen, onClose }, ref) => {
+  const isGoldPassIconGreyedOut = false;
+  const isChainbreakerIconGreyedOut = false;
+
   // Ref to control the sheet programmatically (open/close/snapTo)
   const bottomSheetRef = useRef<BottomSheetModal | null>(null);
 
@@ -110,7 +116,7 @@ const InventoryBottomSheet = React.forwardRef<
         bottomSheetRef.current?.close();
       }
     },
-    [onClose]
+    [onClose],
   );
 
   // Renders the backdrop (dimmed background)
@@ -125,7 +131,7 @@ const InventoryBottomSheet = React.forwardRef<
         opacity={0.5}
       />
     ),
-    []
+    [],
   );
 
   return (
@@ -146,7 +152,7 @@ const InventoryBottomSheet = React.forwardRef<
           <View style={styles.TopBar}>
             <View style={styles.placeholderLeft}></View>
             <Text style={styles.title}>Inventory</Text>
-            <TouchableOpacity style={styles.closeButton}>
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
               <CloseIcon width={24} height={24} />
             </TouchableOpacity>
           </View>
@@ -161,36 +167,106 @@ const InventoryBottomSheet = React.forwardRef<
               </View>
             </View>
             <View style={styles.passContainer}>
-              <View style={styles.passIconContainer}>
-                <GoldPass width={48} height={48} />
-              </View>
-              <View style={styles.passTextContainer}>
-                <Text style={styles.passLabel}>GOLD PASS</Text>
-                <Text style={styles.passDescription}>
-                  20% boost to all progression for 30 days
-                </Text>
-              </View>
-              <RightArrowIcon width={32} height={32} />
-            </View>
-            <View>
-              <View style={styles.chainbreakerContainer}>
+              <Svg
+                style={styles.gradientOverlay}
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                pointerEvents="none"
+              >
+                <Defs>
+                  <RadialGradient
+                    id={"invPassGrad"}
+                    cx="70"
+                    cy="100"
+                    r="70"
+                    gradientUnits="userSpaceOnUse"
+                  >
+                    <Stop offset="0%" stopColor="#006E93" />
+                    <Stop offset="100%" stopColor="#00222D" />
+                  </RadialGradient>
+                </Defs>
+                <Rect
+                  x="-1"
+                  y="-1"
+                  width="102"
+                  height="102"
+                  fill="url(#invPassGrad)"
+                />
+              </Svg>
+              <View style={styles.passContainerContent}>
                 <View style={styles.passIconContainer}>
-                  <Chainbreaker width={48} height={48} />
+                  <Image
+                    source={GoldPass}
+                    style={[
+                      styles.inventoryItemIcon,
+                      isGoldPassIconGreyedOut && styles.greyedOutIcon,
+                    ]}
+                  />
                 </View>
                 <View style={styles.passTextContainer}>
-                  <Text style={styles.passLabel}>NO LEVEL ITEM</Text>
+                  <Text style={styles.passLabel}>GOLD PASS</Text>
                   <Text style={styles.passDescription}>
-                    Unlock a level exclusive boost
+                    20% boost to all progression for 30 days
                   </Text>
                 </View>
                 <RightArrowIcon width={32} height={32} />
+              </View>
+            </View>
+            <View>
+              <View style={styles.chainbreakerContainer}>
+                <Svg
+                  style={styles.gradientOverlay}
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  pointerEvents="none"
+                >
+                  <Defs>
+                    <RadialGradient
+                      id="invChainbreakerGrad"
+                      cx="70"
+                      cy="100"
+                      r="70"
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <Stop offset="0%" stopColor="#4C0093" />
+                      <Stop offset="100%" stopColor="#17002D" />
+                    </RadialGradient>
+                  </Defs>
+                  <Rect
+                    x="-1"
+                    y="-1"
+                    width="102"
+                    height="102"
+                    fill="url(#invChainbreakerGrad)"
+                  />
+                </Svg>
+                <View style={styles.passContainerContent}>
+                  <View style={styles.passIconContainer}>
+                    <Image
+                      source={Chainbreaker}
+                      style={[
+                        styles.inventoryItemIcon,
+                        isChainbreakerIconGreyedOut && styles.greyedOutIcon,
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.passTextContainer}>
+                    <Text style={styles.passLabel}>NO LEVEL ITEM</Text>
+                    <Text style={styles.passDescription}>
+                      Unlock a level exclusive boost
+                    </Text>
+                  </View>
+                  <RightArrowIcon width={32} height={32} />
+                </View>
               </View>
             </View>
           </View>
         </View>
         <View style={styles.gridContainer}>
           {Array.from({ length: 12 }).map((_, i) => (
-            <GridCell key={i} boostRate={2} boostTime={4} Icon={BoostIcon} />
+            <View key={i} style={styles.gridCellWrapper}>
+              <GridCell boostRate={2} boostTime={4} Icon={BoostIcon} />
+            </View>
           ))}
         </View>
       </BottomSheetView>
@@ -312,16 +388,27 @@ const styles = StyleSheet.create({
     fontFamily: "OpenSans",
   },
   passContainer: {
+    borderRadius: 16,
+    height: 104,
+    width: "100%",
+    overflow: "hidden",
+  },
+  passContainerContent: {
     flexDirection: "row",
     justifyContent: "flex-start",
     alignItems: "center",
     width: "100%",
-    backgroundColor: "#006E93",
     gap: 4,
-    borderRadius: 16,
-    height: 104,
+    height: "100%",
     paddingVertical: 8,
     paddingHorizontal: 8,
+  },
+  gradientOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   passTextContainer: {
     flexDirection: "column",
@@ -346,6 +433,14 @@ const styles = StyleSheet.create({
   passIconContainer: {
     paddingHorizontal: 16,
   },
+  inventoryItemIcon: {
+    width: 48,
+    height: 48,
+  },
+  greyedOutIcon: {
+    opacity: 0.3,
+    tintColor: "#8A8A8A",
+  },
 
   passArrowContainer: {
     flexDirection: "row",
@@ -358,16 +453,10 @@ const styles = StyleSheet.create({
     height: 16,
   },
   chainbreakerContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    width: "100%",
-    backgroundColor: "#4C0093",
-    gap: 4,
     borderRadius: 16,
     height: 104,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    width: "100%",
+    overflow: "hidden",
   },
   gridContainer: {
     flexDirection: "row",
@@ -375,5 +464,10 @@ const styles = StyleSheet.create({
     gap: 8,
     width: "100%",
     marginTop: 24,
+    justifyContent: "space-between",
+  },
+  gridCellWrapper: {
+    width: "23%",
+    alignItems: "center",
   },
 });
