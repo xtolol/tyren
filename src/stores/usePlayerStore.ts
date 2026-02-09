@@ -9,9 +9,17 @@ interface PlayerStore {
   level: number;
   xp: number;
   xpToNextLevel: number;
+  progressPercent: number;
+  totalFocusTimeMs: number;
+  totalItemsBought: number;
+  totalBossesDefeated: number;
 
   addCurrency: (type: CurrencyType, amount: number) => void;
   addXp: (amount: number) => void;
+  addProgressPercent: (amount: number) => void;
+  addFocusTime: (ms: number) => void;
+  incrementItemsBought: () => void;
+  incrementBossesDefeated: () => void;
 }
 
 const XP_PER_LEVEL = 1000;
@@ -24,10 +32,38 @@ export const usePlayerStore = create<PlayerStore>()(
       level: 1,
       xp: 0,
       xpToNextLevel: XP_PER_LEVEL,
+      progressPercent: 0,
+      totalFocusTimeMs: 0,
+      totalItemsBought: 0,
+      totalBossesDefeated: 0,
 
       addCurrency: (type, amount) => {
         set((state) => ({
           [type]: state[type] + amount,
+        }));
+      },
+
+      addFocusTime: (ms) => {
+        set((state) => ({
+          totalFocusTimeMs: state.totalFocusTimeMs + ms,
+        }));
+      },
+
+      addProgressPercent: (amount) => {
+        set((state) => ({
+          progressPercent: Math.min(100, state.progressPercent + Math.max(0, amount)),
+        }));
+      },
+
+      incrementItemsBought: () => {
+        set((state) => ({
+          totalItemsBought: state.totalItemsBought + 1,
+        }));
+      },
+
+      incrementBossesDefeated: () => {
+        set((state) => ({
+          totalBossesDefeated: state.totalBossesDefeated + 1,
         }));
       },
 

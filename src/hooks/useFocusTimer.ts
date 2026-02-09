@@ -58,6 +58,8 @@ export function useFocusTimer() {
       return { dust: 0, shards: 0, xp: 0 };
     }
 
+    usePlayerStore.getState().addFocusTime(summary.totalMs);
+
     const rewards = calculateRewards({
       focusTimeMs: summary.totalMs,
       currentLevel: level,

@@ -5,8 +5,9 @@ import ShardIcon from '@/assets/images/shard-16px.svg';
 import { usePlayerStore } from '@/src/stores/usePlayerStore';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 function formatCurrency(value: number): string {
   if (value >= 1000000) {
@@ -20,6 +21,7 @@ function formatCurrency(value: number): string {
 
 export default function NavBar() {
   const { dust, shards } = usePlayerStore();
+  const router = useRouter();
 
   return (
     <View style={styles.container}>
@@ -45,7 +47,9 @@ export default function NavBar() {
         <ShardIcon width={16} height={16} />
         <Text style={styles.shard}>{formatCurrency(shards)}</Text>
       </View>
-      <ResultsIcon width={32} height={32} />
+      <TouchableOpacity onPress={() => router.push('/profile')}>
+        <ResultsIcon width={32} height={32} />
+      </TouchableOpacity>
     </View>
   );
 }

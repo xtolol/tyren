@@ -32,6 +32,17 @@ export default function ArcProgress({
   opacity = 0.8,
   sweepAngle = 110,
   multiplier = 1.0,
+  onMapPress,
+}: {
+  percentage?: number;
+  radius?: number;
+  backgroundStrokeWidth?: number;
+  progressStrokeWidth?: number;
+  color?: string;
+  opacity?: number;
+  sweepAngle?: number;
+  multiplier?: number;
+  onMapPress?: () => void;
 }) {
   const animated = useRef(new Animated.Value(0)).current;
 
@@ -81,7 +92,7 @@ export default function ArcProgress({
       >
         <TouchableOpacity
           style={styles.iconButton}
-          onPress={() => console.log("Map pressed")}
+          onPress={onMapPress}
         >
           <MapIcon width={24} height={24} />
         </TouchableOpacity>

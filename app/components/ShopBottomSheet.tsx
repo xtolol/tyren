@@ -387,7 +387,7 @@ const ShopBottomSheet = React.forwardRef<
     <BottomSheetModal
       ref={setBottomSheetRef}
       snapPoints={snapPoints}
-      index={0}
+      index={-1}
       enableDynamicSizing={false}
       enableContentPanningGesture={false}
       enablePanDownToClose={true}
@@ -427,7 +427,7 @@ const ShopBottomSheet = React.forwardRef<
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Level item</Text>
           <Text style={styles.sectionSubtitle}>
-            Get a level exclusive item for Zalthar's Chains
+            Get a level exclusive item for Zalthar&apos;s Chains
           </Text>
           <LevelItemCard item={shopData.levelItems[0]} />
         </View>

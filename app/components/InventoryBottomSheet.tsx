@@ -69,9 +69,9 @@ const InventoryBottomSheet = React.forwardRef<
     present: () => {
       if (bottomSheetRef.current) {
         const modal = bottomSheetRef.current as any;
-        // Use snapToIndex to open the modal to 80% position (index 1)
+        // Open the modal at its only snap point.
         if (modal.snapToIndex) {
-          modal.snapToIndex(1);
+          modal.snapToIndex(0);
         } else if (modal.present) {
           // Fallback to present if it exists
           modal.present();
@@ -89,9 +89,9 @@ const InventoryBottomSheet = React.forwardRef<
       const timer = setTimeout(() => {
         if (bottomSheetRef.current) {
           const modal = bottomSheetRef.current as any;
-          // Use snapToIndex to open to the 80% position (index 1)
+          // Open to the only configured snap point.
           if (modal.snapToIndex) {
-            modal.snapToIndex(1);
+            modal.snapToIndex(0);
           } else if (modal.present) {
             modal.present();
           }
@@ -106,14 +106,9 @@ const InventoryBottomSheet = React.forwardRef<
   // Callback when sheet changes state
   const handleSheetChanges = useCallback(
     (index: number) => {
-      console.log("handleSheetChanges", index);
       if (index === -1) {
         // Sheet is closed
         onClose();
-      } else if (index === 0) {
-        // Sheet reached the small snap point (5%), close it immediately
-        // No delay needed - close right away
-        bottomSheetRef.current?.close();
       }
     },
     [onClose],
@@ -138,7 +133,7 @@ const InventoryBottomSheet = React.forwardRef<
     <BottomSheetModal
       ref={setBottomSheetRef}
       snapPoints={snapPoints}
-      index={0} // Start at the 80% snap point (index 1)
+      index={-1} // Start closed until isOpen becomes true
       enablePanDownToClose={true} // Allow user to swipe down to close
       backdropComponent={renderBackdrop} // Custom backdrop
       onChange={handleSheetChanges}

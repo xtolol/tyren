@@ -2,6 +2,7 @@ import InventoryIcon from "@/assets/images/inventory-32px.svg";
 import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
 import { useFocusTimer } from "@/src/hooks/useFocusTimer";
+import { usePlayerStore } from "@/src/stores/usePlayerStore";
 import { useFonts } from "expo-font";
 import { VideoView, useVideoPlayer } from "expo-video";
 import React, { useEffect, useRef, useState } from "react";
@@ -74,14 +75,14 @@ export default function HomeScreen() {
   }
 
   const { isRunning, progress, stop, startFreeform } = useFocusTimer();
-  const [displayedProgress, setDisplayedProgress] = useState(0);
+  const { progressPercent, addProgressPercent } = usePlayerStore();
 
   const handleToggle = () => {
     if (isRunning) {
       // Stop the timer and commit progress
       const finalProgress = Math.round(progress);
       stop();
-      setDisplayedProgress((prev) => Math.min(100, prev + finalProgress));
+      addProgressPercent(finalProgress);
     } else {
       startFreeform();
     }
@@ -117,11 +118,11 @@ export default function HomeScreen() {
         nativeControls={false}
       />
       <NavBar />
-      <ProgressBar percentage={displayedProgress} />
+      <ProgressBar percentage={progressPercent} />
       <View style={styles.bottomContainer}>
         <View style={styles.levelContainer}>
           <View style={styles.shareContainer}>
-            <Text style={styles.levelTitle}>Zalthar's Chains</Text>
+            <Text style={styles.levelTitle}>Zalthar&apos;s Chains</Text>
             <ShareIcon width={24} height={24} />
           </View>
           <Text style={styles.levelnumber}>LVL 1</Text>
