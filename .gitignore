@@ -44,5 +44,6 @@ app-example
 
 # Claude Code
 CLAUDE.md
+AGENTS.md
 .claude/
 .agents/

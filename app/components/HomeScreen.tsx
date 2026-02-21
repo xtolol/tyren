@@ -19,6 +19,7 @@ import InventoryBottomSheet, {
   InventoryBottomSheetRef,
 } from "./InventoryBottomSheet";
 import ShopBottomSheet, { ShopBottomSheetRef } from "./ShopBottomSheet";
+import { useRouter } from "expo-router";
 import NavBar from "./NavBar";
 import ProgressBar from "./ProgressBar";
 
@@ -52,6 +53,7 @@ function RadialGradientButton() {
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
   const inventorySheetRef = useRef<InventoryBottomSheetRef>(null);
@@ -118,7 +120,7 @@ export default function HomeScreen() {
         nativeControls={false}
       />
       <NavBar />
-      <ProgressBar percentage={progressPercent} />
+      <ProgressBar percentage={progressPercent} onMapPress={() => router.push('/map' as never)} />
       <View style={styles.bottomContainer}>
         <View style={styles.levelContainer}>
           <View style={styles.shareContainer}>
