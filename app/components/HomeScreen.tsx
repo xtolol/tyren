@@ -1,6 +1,7 @@
 import InventoryIcon from "@/assets/images/inventory-32px.svg";
 import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
+import type { SessionRewards } from "@/src/core/rewards/types";
 import { useFocusTimer } from "@/src/hooks/useFocusTimer";
 import { usePlayerStore } from "@/src/stores/usePlayerStore";
 import { useFonts } from "expo-font";
@@ -19,6 +20,7 @@ import InventoryBottomSheet, {
   InventoryBottomSheetRef,
 } from "./InventoryBottomSheet";
 import ShopBottomSheet, { ShopBottomSheetRef } from "./ShopBottomSheet";
+import SessionSummaryPopup from "./SessionSummaryPopup";
 import { useRouter } from "expo-router";
 import NavBar from "./NavBar";
 import ProgressBar from "./ProgressBar";
@@ -76,15 +78,23 @@ export default function HomeScreen() {
     setIsShopOpen(false);
   }
 
-  const { isRunning, progress, stop, startFreeform } = useFocusTimer();
+  const { isRunning, progress, elapsedMs, stop, startFreeform } = useFocusTimer();
   const { progressPercent, addProgressPercent } = usePlayerStore();
+
+  const [sessionSummary, setSessionSummary] = useState<{
+    rewards: SessionRewards;
+    elapsedMs: number;
+  } | null>(null);
 
   const handleToggle = () => {
     if (isRunning) {
-      // Stop the timer and commit progress
+      const sessionElapsedMs = elapsedMs;
       const finalProgress = Math.round(progress);
-      stop();
+      const rewards = stop();
       addProgressPercent(finalProgress);
+      if (rewards.dust > 0) {
+        setSessionSummary({ rewards, elapsedMs: sessionElapsedMs });
+      }
     } else {
       startFreeform();
     }
@@ -198,6 +208,14 @@ export default function HomeScreen() {
         isOpen={isShopOpen}
         onClose={handleShopClose}
       />
+      {sessionSummary && (
+        <SessionSummaryPopup
+          visible
+          elapsedMs={sessionSummary.elapsedMs}
+          rewards={sessionSummary.rewards}
+          onContinue={() => setSessionSummary(null)}
+        />
+      )}
     </View>
   );
 }

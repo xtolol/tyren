@@ -58,7 +58,8 @@ export function useFocusTimer() {
       return { dust: 0, shards: 0, xp: 0 };
     }
 
-    usePlayerStore.getState().addFocusTime(summary.totalMs);
+    const playerStore = usePlayerStore.getState();
+    playerStore.addFocusTime(summary.totalMs);
 
     const rewards = calculateRewards({
       focusTimeMs: summary.totalMs,
@@ -66,6 +67,10 @@ export function useFocusTimer() {
       boosts: DEFAULT_BOOSTS,
       sessionCompleted: summary.completed,
     });
+
+    if (rewards.dust > 0) playerStore.addCurrency('dust', rewards.dust);
+    if (rewards.shards > 0) playerStore.addCurrency('shards', rewards.shards);
+    if (rewards.xp > 0) playerStore.addXp(rewards.xp);
 
     return rewards;
   };
