@@ -1,6 +1,7 @@
 import DustIcon from '@/assets/images/dust-16px.svg';
 import ShardIcon from '@/assets/images/shard-16px.svg';
 import { usePlayerStore } from '@/src/stores/usePlayerStore';
+import { useAuthStore } from '@/src/stores/useAuthStore';
 import { Ionicons } from '@expo/vector-icons';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,6 +45,7 @@ function formatCurrency(value: number): string {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { signOut, user } = useAuthStore();
   const {
     dust,
     shards,
@@ -53,6 +55,13 @@ export default function ProfileScreen() {
     totalItemsBought,
     totalBossesDefeated,
   } = usePlayerStore();
+
+  const username = (user?.user_metadata?.username as string | undefined) ?? user?.email ?? 'Player';
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.replace('/auth' as never);
+  };
 
   const player = useVideoPlayer(
     require('@/assets/images/videos/1.mp4'),
@@ -133,11 +142,17 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.characterName}>Zalthar&apos;s Chains</Text>
           <Text style={styles.characterLevel}>LVL{level} - {progressPercent}%</Text>
+          <Text style={styles.usernameText}>{username}</Text>
         </View>
 
-        {/* Share Profile Button */}
+        {/* Share + Sign Out */}
         <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
           <Text style={styles.shareButtonText}>Share profile</Text>
+        </TouchableOpacity>
+
+        {/* Sign Out */}
+        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+          <Text style={styles.signOutText}>Sign out</Text>
         </TouchableOpacity>
 
         {/* Stats List */}
@@ -239,6 +254,12 @@ const styles = StyleSheet.create({
     color: 'white',
     opacity: 0.7,
   },
+  usernameText: {
+    fontSize: 12,
+    fontFamily: 'OpenSans',
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 2,
+  },
   shareButton: {
     backgroundColor: '#1A1A1A',
     borderRadius: 100,
@@ -251,6 +272,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'OpenSans',
     color: 'white',
+  },
+  signOutButton: {
+    borderRadius: 100,
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  signOutText: {
+    fontSize: 16,
+    fontFamily: 'OpenSans',
+    color: 'rgba(255,255,255,0.4)',
   },
   statsList: {
     marginTop: 24,
