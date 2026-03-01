@@ -1,4 +1,6 @@
+import DustIcon from "@/assets/images/dust-16px.svg";
 import InventoryIcon from "@/assets/images/inventory-32px.svg";
+import ShardIcon from "@/assets/images/shard-16px.svg";
 import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
 import type { SessionRewards } from "@/src/core/rewards/types";
@@ -8,7 +10,9 @@ import { useFonts } from "expo-font";
 import { VideoView, useVideoPlayer } from "expo-video";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
+  Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -78,27 +82,35 @@ export default function HomeScreen() {
     setIsShopOpen(false);
   }
 
-  const { isRunning, progress, elapsedMs, stop, startFreeform } = useFocusTimer();
+  const { isRunning, loading, error: timerError, progress, elapsedMs, stop, startFreeform } = useFocusTimer();
   const { progressPercent, addProgressPercent } = usePlayerStore();
 
-  const [sessionSummary, setSessionSummary] = useState<{
-    rewards: SessionRewards;
-    elapsedMs: number;
-  } | null>(null);
+  type SessionResult = { elapsedMs: number; dust: number; shards: number; xp: number };
+  const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
 
-  const handleToggle = () => {
+  const handleToggle = async () => {
     if (isRunning) {
-      const sessionElapsedMs = elapsedMs;
+      const snapshotMs = elapsedMs;
       const finalProgress = Math.round(progress);
-      const rewards = stop();
+      const rewards = await stop();
       addProgressPercent(finalProgress);
-      if (rewards.dust > 0) {
-        setSessionSummary({ rewards, elapsedMs: sessionElapsedMs });
+      if (rewards) {
+        setSessionResult({ elapsedMs: snapshotMs, ...rewards });
       }
     } else {
       startFreeform();
     }
   };
+
+  function formatElapsed(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  }
 
   const player = useVideoPlayer(
     require("@/assets/images/videos/1.mp4"),
@@ -149,9 +161,10 @@ export default function HomeScreen() {
 
           {/* Focus Time Button with Radial Gradient */}
           <TouchableOpacity
-            style={styles.textButton}
+            style={[styles.textButton, loading && styles.textButtonDisabled]}
             onPress={handleToggle}
             activeOpacity={0.8}
+            disabled={loading}
           >
             <View style={styles.gradientContainer}>
               <Svg
@@ -170,7 +183,7 @@ export default function HomeScreen() {
                     fy="0%"
                     gradientTransform="scale(1, 1.6)"
                   >
-                    <Stop offset="0%" stopColor="#004156" />
+                    <Stop offset="0%" stopColor={loading ? "#002030" : "#004156"} />
                     <Stop offset="100%" stopColor="#00222D" />
                   </RadialGradient>
                 </Defs>
@@ -184,9 +197,13 @@ export default function HomeScreen() {
                   fill="url(#radial)"
                 />
               </Svg>
-              <Text style={styles.buttonText}>
-                {isRunning ? "Stop" : "Focus Time"}
-              </Text>
+              {loading ? (
+                <ActivityIndicator size="small" color="rgba(255,255,255,0.5)" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  {isRunning ? "Stop" : "Focus Time"}
+                </Text>
+              )}
             </View>
           </TouchableOpacity>
 
@@ -197,6 +214,9 @@ export default function HomeScreen() {
             <InventoryIcon width={32} height={32} />
           </TouchableOpacity>
         </View>
+        {timerError ? (
+          <Text style={styles.timerError}>{timerError}</Text>
+        ) : null}
       </View>
       <InventoryBottomSheet
         ref={inventorySheetRef}
@@ -208,14 +228,52 @@ export default function HomeScreen() {
         isOpen={isShopOpen}
         onClose={handleShopClose}
       />
-      {sessionSummary && (
-        <SessionSummaryPopup
-          visible
-          elapsedMs={sessionSummary.elapsedMs}
-          rewards={sessionSummary.rewards}
-          onContinue={() => setSessionSummary(null)}
-        />
-      )}
+
+      <Modal
+        visible={sessionResult !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSessionResult(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Session Complete</Text>
+            <Text style={styles.modalTime}>{sessionResult ? formatElapsed(sessionResult.elapsedMs) : ""}</Text>
+
+            <View style={styles.modalDivider} />
+
+            <View style={styles.modalRewards}>
+              <View style={styles.modalRewardRow}>
+                <DustIcon width={16} height={16} />
+                <Text style={styles.modalRewardLabel}>Time Dust</Text>
+                <Text style={[styles.modalRewardValue, styles.dustColor]}>
+                  +{sessionResult?.dust ?? 0}
+                </Text>
+              </View>
+              <View style={styles.modalRewardRow}>
+                <ShardIcon width={16} height={16} />
+                <Text style={styles.modalRewardLabel}>Time Shards</Text>
+                <Text style={[styles.modalRewardValue, styles.shardColor]}>
+                  +{sessionResult?.shards ?? 0}
+                </Text>
+              </View>
+              <View style={styles.modalRewardRow}>
+                <Text style={styles.modalRewardLabel}>XP</Text>
+                <Text style={styles.modalRewardValue}>
+                  +{sessionResult?.xp ?? 0}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setSessionResult(null)}
+            >
+              <Text style={styles.modalButtonText}>Collect</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -270,6 +328,13 @@ const styles = StyleSheet.create({
     fontFamily: "OpenSans",
     color: "white",
   },
+  timerError: {
+    fontSize: 12,
+    fontFamily: 'OpenSans',
+    color: '#FF6B6B',
+    textAlign: 'center',
+    marginTop: -16,
+  },
   botbuttonsContainer: {
     width: "100%",
     alignItems: "center",
@@ -290,6 +355,9 @@ const styles = StyleSheet.create({
     width: 200,
     borderRadius: 32,
   },
+  textButtonDisabled: {
+    opacity: 0.6,
+  },
   gradientContainer: {
     flex: 1,
     justifyContent: "center",
@@ -300,5 +368,78 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "regular",
     fontFamily: "OpenSans",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: "100%",
+    backgroundColor: "#0A1A1F",
+    borderRadius: 24,
+    padding: 28,
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 14,
+    fontFamily: "OpenSans",
+    color: "rgba(255,255,255,0.5)",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  modalTime: {
+    fontSize: 48,
+    fontFamily: "InstrumentSerif-Regular",
+    color: "white",
+    marginBottom: 24,
+  },
+  modalDivider: {
+    width: "100%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    marginBottom: 24,
+  },
+  modalRewards: {
+    width: "100%",
+    gap: 16,
+    marginBottom: 28,
+  },
+  modalRewardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  modalRewardLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "OpenSans",
+    color: "rgba(255,255,255,0.6)",
+  },
+  modalRewardValue: {
+    fontSize: 14,
+    fontFamily: "OpenSans",
+    color: "white",
+  },
+  dustColor: {
+    color: "#FBC647",
+  },
+  shardColor: {
+    color: "#C34DB0",
+  },
+  modalButton: {
+    width: "100%",
+    paddingVertical: 16,
+    backgroundColor: "#1A1A1A",
+    borderRadius: 100,
+    alignItems: "center",
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontFamily: "OpenSans",
+    color: "white",
   },
 });

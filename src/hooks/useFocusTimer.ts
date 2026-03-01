@@ -1,7 +1,4 @@
 import { useFocusTimerStore } from '../stores/useFocusTimerStore';
-import type { SessionRewards } from '../core/rewards/types';
-import { calculateRewards } from '../core/rewards/types';
-import { DEFAULT_BOOSTS } from '../core/boosts/types';
 import { usePlayerStore } from '../stores/usePlayerStore';
 
 function formatTime(ms: number): string {
@@ -12,98 +9,51 @@ function formatTime(ms: number): string {
 }
 
 export function useFocusTimer() {
-  const {
-    status,
-    mode,
-    elapsedMs,
-    targetDurationMs,
-    start,
-    pause,
-    resume,
-    stop: stopTimer,
-    reset,
-  } = useFocusTimerStore();
+  const { status, elapsedMs, targetDurationMs, loading, error, start, stop: stopTimer, reset } =
+    useFocusTimerStore();
 
-  const { level } = usePlayerStore();
+  const { addCurrency, addXp, addFocusTime } = usePlayerStore();
 
   const isRunning = status === 'running';
-  const isPaused = status === 'paused';
-  const isCompleted = status === 'completed';
 
   const formattedTime = formatTime(elapsedMs);
 
-  // Progress: 0-100
-  // For target mode: based on elapsed vs target
-  // For freeform: we use elapsed minutes as percentage (caps at 100)
   const progress = (() => {
     if (targetDurationMs) {
       return Math.min(100, (elapsedMs / targetDurationMs) * 100);
     }
     // Freeform: 1% per minute, max 100%
-    const minutes = elapsedMs / 60000;
-    return Math.min(100, minutes);
+    return Math.min(100, elapsedMs / 60_000);
   })();
 
-  const startFreeform = () => {
-    start('freeform');
-  };
+  const startFreeform = () => start('freeform');
 
-  const startTarget = (durationMs: number) => {
-    start('target', durationMs);
-  };
+  const startTarget = (durationMs: number) => start('target', durationMs);
 
-  const stop = (): SessionRewards => {
-    const summary = stopTimer();
-    if (!summary) {
-      return { dust: 0, shards: 0, xp: 0 };
+  const stop = async () => {
+    const rewards = await stopTimer();
+    if (rewards) {
+      if (rewards.dust > 0) addCurrency('dust', rewards.dust);
+      if (rewards.shards > 0) addCurrency('shards', rewards.shards);
+      if (rewards.xp > 0) addXp(rewards.xp);
+      addFocusTime(elapsedMs);
     }
-
-    const playerStore = usePlayerStore.getState();
-    playerStore.addFocusTime(summary.totalMs);
-
-    const rewards = calculateRewards({
-      focusTimeMs: summary.totalMs,
-      currentLevel: level,
-      boosts: DEFAULT_BOOSTS,
-      sessionCompleted: summary.completed,
-    });
-
-    if (rewards.dust > 0) playerStore.addCurrency('dust', rewards.dust);
-    if (rewards.shards > 0) playerStore.addCurrency('shards', rewards.shards);
-    if (rewards.xp > 0) playerStore.addXp(rewards.xp);
-
     return rewards;
-  };
-
-  const toggle = () => {
-    if (status === 'idle') {
-      startFreeform();
-    } else if (isRunning) {
-      pause();
-    } else if (isPaused) {
-      resume();
-    } else if (isCompleted) {
-      stop();
-    }
   };
 
   return {
     status,
     isRunning,
-    isPaused,
-    isCompleted,
+    loading,
+    error,
     elapsedMs,
     formattedTime,
     progress,
-    mode,
     targetDurationMs,
 
     startFreeform,
     startTarget,
-    pause,
-    resume,
     stop,
-    toggle,
     reset,
   };
 }
