@@ -3,6 +3,7 @@ import InventoryIcon from "@/assets/images/inventory-32px.svg";
 import ShardIcon from "@/assets/images/shard-16px.svg";
 import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
+import type { SessionRewards } from "@/src/core/rewards/types";
 import { useFocusTimer } from "@/src/hooks/useFocusTimer";
 import { usePlayerStore } from "@/src/stores/usePlayerStore";
 import { useFonts } from "expo-font";
@@ -23,6 +24,7 @@ import InventoryBottomSheet, {
   InventoryBottomSheetRef,
 } from "./InventoryBottomSheet";
 import ShopBottomSheet, { ShopBottomSheetRef } from "./ShopBottomSheet";
+import SessionSummaryPopup from "./SessionSummaryPopup";
 import { useRouter } from "expo-router";
 import NavBar from "./NavBar";
 import ProgressBar from "./ProgressBar";
