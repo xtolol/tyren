@@ -1,99 +1,94 @@
 import { create } from 'zustand';
-import { timerService, type TimerStatus, type SessionMode, type SessionSummary } from '../core/timer';
+import { api } from '../lib/api';
+import type { StopSessionResponse } from '../lib/api';
+
+// Module-level ticker — kept outside Zustand to avoid spurious re-renders
+let _tickInterval: ReturnType<typeof setInterval> | null = null;
+
+function startTicking(onTick: (ms: number) => void, offsetMs = 0) {
+  stopTicking();
+  const origin = Date.now() - offsetMs;
+  _tickInterval = setInterval(() => onTick(Date.now() - origin), 1000);
+}
+
+function stopTicking() {
+  if (_tickInterval) {
+    clearInterval(_tickInterval);
+    _tickInterval = null;
+  }
+}
+
+type TimerStatus = 'idle' | 'running';
 
 interface FocusTimerStore {
   status: TimerStatus;
-  mode: SessionMode;
+  sessionId: string | null;
   elapsedMs: number;
   targetDurationMs: number | null;
-  sessionId: string | null;
+  loading: boolean;
+  error: string | null;
 
-  start: (mode?: SessionMode, targetMs?: number) => void;
-  pause: () => void;
-  resume: () => void;
-  stop: () => SessionSummary | null;
+  start: (mode?: 'freeform' | 'target', targetMs?: number) => Promise<void>;
+  stop: () => Promise<StopSessionResponse | null>;
+  resumeFromServer: (sessionId: string, startedAt: string, targetMs: number | null) => void;
   reset: () => void;
-
-  _updateElapsed: (ms: number) => void;
-  _syncFromService: () => void;
 }
 
-export const useFocusTimerStore = create<FocusTimerStore>((set, get) => {
-  // Set up tick callback to update store
-  timerService.setTickCallback((elapsedMs) => {
-    get()._updateElapsed(elapsedMs);
-    get()._syncFromService();
-  });
+export const useFocusTimerStore = create<FocusTimerStore>((set, get) => ({
+  status: 'idle',
+  sessionId: null,
+  elapsedMs: 0,
+  targetDurationMs: null,
+  loading: false,
+  error: null,
 
-  return {
-    status: 'idle',
-    mode: 'freeform',
-    elapsedMs: 0,
-    targetDurationMs: null,
-    sessionId: null,
+  start: async (mode = 'freeform', targetMs) => {
+    if (get().status !== 'idle' || get().loading) return;
+    set({ loading: true, error: null });
 
-    start: (mode = 'freeform', targetMs) => {
-      const sessionId = timerService.start(mode, targetMs);
-      const state = timerService.getState();
+    try {
+      const session = await api.sessions.start(mode, targetMs);
       set({
-        status: state.status,
-        mode: state.mode,
+        status: 'running',
+        sessionId: session.session_id,
+        targetDurationMs: targetMs ?? null,
         elapsedMs: 0,
-        targetDurationMs: state.targetDurationMs,
-        sessionId,
+        loading: false,
       });
-    },
+      startTicking((ms) => set({ elapsedMs: ms }));
+    } catch (err) {
+      set({ loading: false, error: (err as Error).message });
+    }
+  },
 
-    pause: () => {
-      timerService.pause();
-      const state = timerService.getState();
-      set({
-        status: state.status,
-        elapsedMs: state.accumulatedMs,
-      });
-    },
+  stop: async () => {
+    const { sessionId, status, elapsedMs } = get();
+    if (status !== 'running' || !sessionId) return null;
 
-    resume: () => {
-      timerService.resume();
-      const state = timerService.getState();
-      set({
-        status: state.status,
-      });
-    },
+    stopTicking();
+    set({ loading: true });
 
-    stop: () => {
-      if (get().status === 'idle') return null;
-      const summary = timerService.stop();
-      set({
-        status: 'idle',
-        mode: 'freeform',
-        elapsedMs: 0,
-        targetDurationMs: null,
-        sessionId: null,
-      });
-      return summary;
-    },
+    try {
+      const result = await api.sessions.stop(sessionId);
+      set({ status: 'idle', sessionId: null, elapsedMs: 0, targetDurationMs: null, loading: false });
+      return result;
+    } catch (err) {
+      // Resume the local display timer from where it stopped
+      startTicking((ms) => set({ elapsedMs: ms }), elapsedMs);
+      set({ loading: false, error: (err as Error).message });
+      return null;
+    }
+  },
 
-    reset: () => {
-      timerService.reset();
-      set({
-        status: 'idle',
-        mode: 'freeform',
-        elapsedMs: 0,
-        targetDurationMs: null,
-        sessionId: null,
-      });
-    },
+  resumeFromServer: (sessionId, startedAt, targetMs) => {
+    if (_tickInterval) return; // already ticking
+    const elapsedMs = Math.max(0, Date.now() - new Date(startedAt).getTime());
+    set({ status: 'running', sessionId, targetDurationMs: targetMs, elapsedMs, loading: false, error: null });
+    startTicking((ms) => set({ elapsedMs: ms }), elapsedMs);
+  },
 
-    _updateElapsed: (ms) => {
-      set({ elapsedMs: ms });
-    },
-
-    _syncFromService: () => {
-      const state = timerService.getState();
-      set({
-        status: state.status,
-      });
-    },
-  };
-});
+  reset: () => {
+    stopTicking();
+    set({ status: 'idle', sessionId: null, elapsedMs: 0, targetDurationMs: null, loading: false, error: null });
+  },
+}));
