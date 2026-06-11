@@ -17,6 +17,7 @@ interface PlayerStore {
   addCurrency: (type: CurrencyType, amount: number) => void;
   addXp: (amount: number) => void;
   addProgressPercent: (amount: number) => void;
+  setProgressPercent: (value: number) => void;
   addFocusTime: (ms: number) => void;
   incrementItemsBought: () => void;
   incrementBossesDefeated: () => void;
@@ -60,6 +61,10 @@ export const usePlayerStore = create<PlayerStore>()(
         set((state) => ({
           progressPercent: Math.min(100, state.progressPercent + Math.max(0, amount)),
         }));
+      },
+
+      setProgressPercent: (value) => {
+        set({ progressPercent: Math.min(100, Math.max(0, value)) });
       },
 
       incrementItemsBought: () => {

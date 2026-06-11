@@ -82,8 +82,8 @@ export default function HomeScreen() {
     setIsShopOpen(false);
   }
 
-  const { isRunning, loading, error: timerError, progress, elapsedMs, stop, startFreeform } = useFocusTimer();
-  const { progressPercent, addProgressPercent } = usePlayerStore();
+  const { isRunning, loading, error: timerError, elapsedMs, stop, startFreeform } = useFocusTimer();
+  const { progressPercent } = usePlayerStore();
 
   type SessionResult = { elapsedMs: number; dust: number; shards: number; xp: number };
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
@@ -91,9 +91,7 @@ export default function HomeScreen() {
   const handleToggle = async () => {
     if (isRunning) {
       const snapshotMs = elapsedMs;
-      const finalProgress = Math.round(progress);
       const rewards = await stop();
-      addProgressPercent(finalProgress);
       if (rewards) {
         setSessionResult({ elapsedMs: snapshotMs, ...rewards });
       }

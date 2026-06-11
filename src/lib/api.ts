@@ -47,6 +47,7 @@ export interface StopSessionResponse {
   level: number;
   new_xp: number;
   xp_to_next_level: number;
+  progress_percent: number;
 }
 
 export interface PlayerProfile {

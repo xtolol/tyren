@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
-import type { SessionRewards } from '../lib/api';
+import type { StopSessionResponse } from '../lib/api';
 
 // Module-level ticker — kept outside Zustand to avoid spurious re-renders
 let _tickInterval: ReturnType<typeof setInterval> | null = null;
@@ -29,7 +29,7 @@ interface FocusTimerStore {
   error: string | null;
 
   start: (mode?: 'freeform' | 'target', targetMs?: number) => Promise<void>;
-  stop: () => Promise<SessionRewards | null>;
+  stop: () => Promise<StopSessionResponse | null>;
   resumeFromServer: (sessionId: string, startedAt: string, targetMs: number | null) => void;
   reset: () => void;
 }
@@ -71,7 +71,7 @@ export const useFocusTimerStore = create<FocusTimerStore>((set, get) => ({
     try {
       const result = await api.sessions.stop(sessionId);
       set({ status: 'idle', sessionId: null, elapsedMs: 0, targetDurationMs: null, loading: false });
-      return result.rewards;
+      return result;
     } catch (err) {
       // Resume the local display timer from where it stopped
       startTicking((ms) => set({ elapsedMs: ms }), elapsedMs);
