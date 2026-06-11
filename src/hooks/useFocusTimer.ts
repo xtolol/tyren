@@ -12,7 +12,7 @@ export function useFocusTimer() {
   const { status, elapsedMs, targetDurationMs, loading, error, start, stop: stopTimer, reset } =
     useFocusTimerStore();
 
-  const { addCurrency, addXp, addFocusTime, setProgressPercent } = usePlayerStore();
+  const { applySessionResult } = usePlayerStore();
 
   const isRunning = status === 'running';
 
@@ -33,12 +33,9 @@ export function useFocusTimer() {
   const stop = async () => {
     const result = await stopTimer();
     if (result) {
-      const { rewards, progress_percent } = result;
-      if (rewards.dust > 0) addCurrency('dust', rewards.dust);
-      if (rewards.shards > 0) addCurrency('shards', rewards.shards);
-      if (rewards.xp > 0) addXp(rewards.xp);
-      addFocusTime(elapsedMs);
-      setProgressPercent(progress_percent);
+      // The server already applied rewards atomically — mirror its totals
+      // instead of re-deriving them with the client's own level curve.
+      applySessionResult(result);
     }
     return result?.rewards ?? null;
   };

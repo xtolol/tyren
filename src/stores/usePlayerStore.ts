@@ -27,6 +27,11 @@ interface PlayerStore {
     total_focus_time_ms: number; total_items_bought: number;
     total_bosses_defeated: number;
   }) => void;
+  applySessionResult: (result: {
+    dust: number; shards: number; level: number; new_xp: number;
+    xp_to_next_level: number; progress_percent: number;
+    total_focus_time_ms: number;
+  }) => void;
   reset: () => void;
 }
 
@@ -90,6 +95,18 @@ export const usePlayerStore = create<PlayerStore>()(
           totalFocusTimeMs: profile.total_focus_time_ms,
           totalItemsBought: profile.total_items_bought,
           totalBossesDefeated: profile.total_bosses_defeated,
+        });
+      },
+
+      applySessionResult: (result) => {
+        set({
+          dust: result.dust,
+          shards: result.shards,
+          level: result.level,
+          xp: result.new_xp,
+          xpToNextLevel: result.xp_to_next_level,
+          progressPercent: Number(result.progress_percent),
+          totalFocusTimeMs: result.total_focus_time_ms,
         });
       },
 

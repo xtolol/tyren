@@ -48,6 +48,9 @@ export interface StopSessionResponse {
   new_xp: number;
   xp_to_next_level: number;
   progress_percent: number;
+  dust: number;
+  shards: number;
+  total_focus_time_ms: number;
 }
 
 export interface PlayerProfile {

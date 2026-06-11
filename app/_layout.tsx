@@ -8,11 +8,16 @@ import { useAuthStore } from "@/src/stores/useAuthStore";
 import { supabase } from "@/src/lib/supabase";
 
 async function handleDeepLink(url: string) {
-  // Supabase appends tokens as query params when redirecting to a custom scheme
+  // Supabase appends tokens as query params or, in the implicit flow,
+  // as URL fragment params (tyren://#access_token=...) — check both.
   const parsed = new URL(url);
-  const accessToken = parsed.searchParams.get('access_token');
-  const refreshToken = parsed.searchParams.get('refresh_token');
-  const code = parsed.searchParams.get('code');
+  const fragmentParams = new URLSearchParams(parsed.hash.replace(/^#/, ''));
+  const getParam = (key: string) =>
+    parsed.searchParams.get(key) ?? fragmentParams.get(key);
+
+  const accessToken = getParam('access_token');
+  const refreshToken = getParam('refresh_token');
+  const code = getParam('code');
 
   if (accessToken && refreshToken) {
     await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });

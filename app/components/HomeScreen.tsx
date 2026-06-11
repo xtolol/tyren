@@ -1,9 +1,6 @@
-import DustIcon from "@/assets/images/dust-16px.svg";
 import InventoryIcon from "@/assets/images/inventory-32px.svg";
-import ShardIcon from "@/assets/images/shard-16px.svg";
 import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
-import type { SessionRewards } from "@/src/core/rewards/types";
 import { useFocusTimer } from "@/src/hooks/useFocusTimer";
 import { usePlayerStore } from "@/src/stores/usePlayerStore";
 import { useFonts } from "expo-font";
@@ -12,7 +9,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
-  Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -31,40 +27,13 @@ import ProgressBar from "./ProgressBar";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("screen");
 
-// Radial Gradient Component
-function RadialGradientButton() {
-  return (
-    <Svg
-      width="100%"
-      height="100%"
-      style={{ position: "absolute", top: 0, left: 0 }}
-    >
-      <Defs>
-        <RadialGradient id="radial" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-          <Stop offset="0%" stopColor="#004156" />
-          <Stop offset="100%" stopColor="#00222D" />
-        </RadialGradient>
-      </Defs>
-      <Rect
-        x="0"
-        y="0"
-        width="100%"
-        height="100%"
-        rx="100"
-        ry="100"
-        fill="url(#radial)"
-      />
-    </Svg>
-  );
-}
-
 export default function HomeScreen() {
   const router = useRouter();
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
   const inventorySheetRef = useRef<InventoryBottomSheetRef>(null);
   const shopSheetRef = useRef<ShopBottomSheetRef>(null);
-  const [fontsLoaded] = useFonts({
+  useFonts({
     "InstrumentSerif-Regular": require("@/assets/images/fonts/InstrumentSerif-Regular.ttf"),
   });
 
@@ -83,7 +52,7 @@ export default function HomeScreen() {
   }
 
   const { isRunning, loading, error: timerError, elapsedMs, stop, startFreeform } = useFocusTimer();
-  const { progressPercent } = usePlayerStore();
+  const { progressPercent, level } = usePlayerStore();
 
   type SessionResult = { elapsedMs: number; dust: number; shards: number; xp: number };
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
@@ -99,16 +68,6 @@ export default function HomeScreen() {
       startFreeform();
     }
   };
-
-  function formatElapsed(ms: number): string {
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
-    if (minutes > 0) return `${minutes}m ${seconds}s`;
-    return `${seconds}s`;
-  }
 
   const player = useVideoPlayer(
     require("@/assets/images/videos/1.mp4"),
@@ -147,7 +106,7 @@ export default function HomeScreen() {
             <Text style={styles.levelTitle}>Zalthar&apos;s Chains</Text>
             <ShareIcon width={24} height={24} />
           </View>
-          <Text style={styles.levelnumber}>LVL 1</Text>
+          <Text style={styles.levelnumber}>LVL {level}</Text>
         </View>
         <View style={styles.botbuttonsContainer}>
           <TouchableOpacity
@@ -227,51 +186,16 @@ export default function HomeScreen() {
         onClose={handleShopClose}
       />
 
-      <Modal
+      <SessionSummaryPopup
         visible={sessionResult !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSessionResult(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Session Complete</Text>
-            <Text style={styles.modalTime}>{sessionResult ? formatElapsed(sessionResult.elapsedMs) : ""}</Text>
-
-            <View style={styles.modalDivider} />
-
-            <View style={styles.modalRewards}>
-              <View style={styles.modalRewardRow}>
-                <DustIcon width={16} height={16} />
-                <Text style={styles.modalRewardLabel}>Time Dust</Text>
-                <Text style={[styles.modalRewardValue, styles.dustColor]}>
-                  +{sessionResult?.dust ?? 0}
-                </Text>
-              </View>
-              <View style={styles.modalRewardRow}>
-                <ShardIcon width={16} height={16} />
-                <Text style={styles.modalRewardLabel}>Time Shards</Text>
-                <Text style={[styles.modalRewardValue, styles.shardColor]}>
-                  +{sessionResult?.shards ?? 0}
-                </Text>
-              </View>
-              <View style={styles.modalRewardRow}>
-                <Text style={styles.modalRewardLabel}>XP</Text>
-                <Text style={styles.modalRewardValue}>
-                  +{sessionResult?.xp ?? 0}
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={() => setSessionResult(null)}
-            >
-              <Text style={styles.modalButtonText}>Collect</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        elapsedMs={sessionResult?.elapsedMs ?? 0}
+        rewards={{
+          dust: sessionResult?.dust ?? 0,
+          shards: sessionResult?.shards ?? 0,
+          xp: sessionResult?.xp ?? 0,
+        }}
+        onContinue={() => setSessionResult(null)}
+      />
     </View>
   );
 }
@@ -366,78 +290,5 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "regular",
     fontFamily: "OpenSans",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  modalCard: {
-    width: "100%",
-    backgroundColor: "#0A1A1F",
-    borderRadius: 24,
-    padding: 28,
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontSize: 14,
-    fontFamily: "OpenSans",
-    color: "rgba(255,255,255,0.5)",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  modalTime: {
-    fontSize: 48,
-    fontFamily: "InstrumentSerif-Regular",
-    color: "white",
-    marginBottom: 24,
-  },
-  modalDivider: {
-    width: "100%",
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    marginBottom: 24,
-  },
-  modalRewards: {
-    width: "100%",
-    gap: 16,
-    marginBottom: 28,
-  },
-  modalRewardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  modalRewardLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: "OpenSans",
-    color: "rgba(255,255,255,0.6)",
-  },
-  modalRewardValue: {
-    fontSize: 14,
-    fontFamily: "OpenSans",
-    color: "white",
-  },
-  dustColor: {
-    color: "#FBC647",
-  },
-  shardColor: {
-    color: "#C34DB0",
-  },
-  modalButton: {
-    width: "100%",
-    paddingVertical: 16,
-    backgroundColor: "#1A1A1A",
-    borderRadius: 100,
-    alignItems: "center",
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontFamily: "OpenSans",
-    color: "white",
   },
 });

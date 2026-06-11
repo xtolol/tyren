@@ -6,6 +6,7 @@ import { usePlayerStore } from './usePlayerStore';
 import { useFocusTimerStore } from './useFocusTimerStore';
 
 async function syncFromServer() {
+  const localSessionId = useFocusTimerStore.getState().sessionId;
   try {
     const { profile, active_session } = await api.player.state();
     usePlayerStore.getState().hydrate(profile);
@@ -15,6 +16,11 @@ async function syncFromServer() {
         active_session.started_at,
         active_session.target_ms,
       );
+    } else if (localSessionId && useFocusTimerStore.getState().sessionId === localSessionId) {
+      // Server has no active session, yet we're still tracking one that
+      // predates this fetch — it was closed elsewhere, so drop it.
+      // (A session started mid-fetch changes sessionId and is left alone.)
+      useFocusTimerStore.getState().reset();
     }
   } catch {
     // Network unavailable — keep local state
