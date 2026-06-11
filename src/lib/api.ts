@@ -43,6 +43,7 @@ export interface StartSessionResponse {
 export interface StopSessionResponse {
   session_id: string;
   elapsed_ms: number;
+  completed: boolean;
   rewards: SessionRewards;
   level: number;
   new_xp: number;
@@ -51,6 +52,8 @@ export interface StopSessionResponse {
   dust: number;
   shards: number;
   total_focus_time_ms: number;
+  current_streak: number;
+  longest_streak: number;
 }
 
 export interface PlayerProfile {
@@ -64,6 +67,9 @@ export interface PlayerProfile {
   total_focus_time_ms: number;
   total_items_bought: number;
   total_bosses_defeated: number;
+  current_streak: number;
+  longest_streak: number;
+  last_focus_date: string | null;
   updated_at: string;
 }
 

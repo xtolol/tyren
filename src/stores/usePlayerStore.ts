@@ -13,6 +13,8 @@ interface PlayerStore {
   totalFocusTimeMs: number;
   totalItemsBought: number;
   totalBossesDefeated: number;
+  currentStreak: number;
+  longestStreak: number;
 
   addCurrency: (type: CurrencyType, amount: number) => void;
   addXp: (amount: number) => void;
@@ -26,11 +28,13 @@ interface PlayerStore {
     xp_to_next_level: number; progress_percent: number;
     total_focus_time_ms: number; total_items_bought: number;
     total_bosses_defeated: number;
+    current_streak: number; longest_streak: number;
   }) => void;
   applySessionResult: (result: {
     dust: number; shards: number; level: number; new_xp: number;
     xp_to_next_level: number; progress_percent: number;
     total_focus_time_ms: number;
+    current_streak: number; longest_streak: number;
   }) => void;
   reset: () => void;
 }
@@ -49,6 +53,8 @@ export const usePlayerStore = create<PlayerStore>()(
       totalFocusTimeMs: 0,
       totalItemsBought: 0,
       totalBossesDefeated: 0,
+      currentStreak: 0,
+      longestStreak: 0,
 
       addCurrency: (type, amount) => {
         set((state) => ({
@@ -95,6 +101,8 @@ export const usePlayerStore = create<PlayerStore>()(
           totalFocusTimeMs: profile.total_focus_time_ms,
           totalItemsBought: profile.total_items_bought,
           totalBossesDefeated: profile.total_bosses_defeated,
+          currentStreak: profile.current_streak,
+          longestStreak: profile.longest_streak,
         });
       },
 
@@ -107,6 +115,8 @@ export const usePlayerStore = create<PlayerStore>()(
           xpToNextLevel: result.xp_to_next_level,
           progressPercent: Number(result.progress_percent),
           totalFocusTimeMs: result.total_focus_time_ms,
+          currentStreak: result.current_streak,
+          longestStreak: result.longest_streak,
         });
       },
 
@@ -115,6 +125,7 @@ export const usePlayerStore = create<PlayerStore>()(
           dust: 0, shards: 0, level: 1, xp: 0,
           xpToNextLevel: XP_PER_LEVEL, progressPercent: 0,
           totalFocusTimeMs: 0, totalItemsBought: 0, totalBossesDefeated: 0,
+          currentStreak: 0, longestStreak: 0,
         });
       },
 

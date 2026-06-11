@@ -54,6 +54,8 @@ export default function ProfileScreen() {
     totalFocusTimeMs,
     totalItemsBought,
     totalBossesDefeated,
+    currentStreak,
+    longestStreak,
   } = usePlayerStore();
 
   const username = (user?.user_metadata?.username as string | undefined) ?? user?.email ?? 'Player';
@@ -89,6 +91,7 @@ export default function ProfileScreen() {
       'My Tyren Profile',
       '',
       `Level: ${level}`,
+      `Focus streak: ${currentStreak} day${currentStreak === 1 ? '' : 's'}`,
       `Time focused: ${formatFocusTime(totalFocusTimeMs)}`,
       `Dust earned: ${formatCurrency(dust)}`,
       `Shards collected: ${formatCurrency(shards)}`,
@@ -157,6 +160,18 @@ export default function ProfileScreen() {
 
         {/* Stats List */}
         <View style={styles.statsList}>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Focus streak</Text>
+            <Text style={styles.statValue}>
+              {currentStreak} day{currentStreak === 1 ? '' : 's'}
+            </Text>
+          </View>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Longest streak</Text>
+            <Text style={styles.statValue}>
+              {longestStreak} day{longestStreak === 1 ? '' : 's'}
+            </Text>
+          </View>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>Time spent focused</Text>
             <Text style={styles.statValue}>{formatFocusTime(totalFocusTimeMs)}</Text>
