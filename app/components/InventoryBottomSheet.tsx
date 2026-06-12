@@ -1,8 +1,12 @@
 import BoostIcon from "@/assets/images/booster-48px.svg";
-import Chainbreaker from "@/assets/images/chainbreaker-48px-grey.png";
+import ChainbreakerGrey from "@/assets/images/chainbreaker-48px-grey.png";
+import Chainbreaker from "@/assets/images/chainbreaker-48px.png";
 import GoldPass from "@/assets/images/goldpass-48px-grey.png";
 import RightArrowIcon from "@/assets/images/right-32px.svg";
 import CloseIcon from "@/assets/images/x-24px.svg";
+import type { ActiveBoost, ShopItem } from "@/src/lib/api";
+import { api } from "@/src/lib/api";
+import { usePlayerStore } from "@/src/stores/usePlayerStore";
 
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
@@ -18,9 +22,10 @@ import React, {
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import {
-  Dimensions,
+  Alert,
   Image,
   StyleSheet,
   Text,
@@ -38,28 +43,136 @@ export interface InventoryBottomSheetRef {
   present: () => void;
 }
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const GRID_SLOTS = 12;
+
+function formatRemaining(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+}
+
+// Live countdown for the active boost banner; ticks only while mounted
+// (i.e. while the sheet is open).
+function BoostBanner({ boost }: { boost: ActiveBoost | null }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!boost) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [boost]);
+
+  const remainingMs = boost ? new Date(boost.expires_at).getTime() - now : 0;
+
+  return (
+    <View style={styles.boostContainer}>
+      <View style={styles.boostIconContainer}>
+        <BoostIcon width={32} height={32} />
+        {boost && remainingMs > 0 ? (
+          <View style={styles.boostTextContainer}>
+            <Text style={styles.boostLabel}>
+              {boost.effect.value ?? "?"}X BOOST ACTIVE:{" "}
+            </Text>
+            <Text style={styles.boostTime}>
+              {formatRemaining(remainingMs)} remaining
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.boostLabel}>NO ACTIVE BOOST</Text>
+        )}
+      </View>
+    </View>
+  );
+}
 
 const InventoryBottomSheet = React.forwardRef<
   InventoryBottomSheetRef,
   InventoryBottomSheetProps
 >(({ isOpen, onClose }, ref) => {
-  const isGoldPassIconGreyedOut = false;
-  const isChainbreakerIconGreyedOut = false;
+  const inventory = usePlayerStore((s) => s.inventory);
+  const activeBoosts = usePlayerStore((s) => s.activeBoosts);
+
+  // Catalog provides names/effects for owned item ids.
+  const [catalog, setCatalog] = useState<ShopItem[] | null>(null);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || catalog !== null) return;
+    api.shop.catalog().then(setCatalog).catch(() => {});
+  }, [isOpen, catalog]);
+
+  const itemsById = useMemo(
+    () => new Map((catalog ?? []).map((item) => [item.id, item])),
+    [catalog],
+  );
+
+  const liveBoost = useMemo(() => {
+    const nowMs = Date.now();
+    const live = activeBoosts.filter(
+      (b) => new Date(b.expires_at).getTime() > nowMs,
+    );
+    if (live.length === 0) return null;
+    return live.reduce((best, b) =>
+      (b.effect.value ?? 0) > (best.effect.value ?? 0) ? b : best,
+    );
+  }, [activeBoosts]);
+
+  const ownedBoosters = useMemo(
+    () =>
+      Object.entries(inventory)
+        .filter(([itemId, quantity]) => {
+          if (quantity <= 0) return false;
+          const item = itemsById.get(itemId);
+          return item?.effect.type === "reward_multiplier";
+        })
+        .map(([itemId, quantity]) => ({
+          item: itemsById.get(itemId)!,
+          quantity,
+        })),
+    [inventory, itemsById],
+  );
+
+  const hasChainbreaker = (inventory["chainbreaker"] ?? 0) > 0;
+
+  const handleActivate = useCallback(
+    (item: ShopItem) => {
+      if (activatingId) return;
+      Alert.alert(
+        `Activate ${item.name}?`,
+        `${item.description}. It starts the moment you confirm.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Activate",
+            onPress: async () => {
+              setActivatingId(item.id);
+              try {
+                const result = await api.boosts.activate(item.id);
+                usePlayerStore.getState().applyBoostActivation(result);
+              } catch (err) {
+                Alert.alert("Activation failed", (err as Error).message);
+              } finally {
+                setActivatingId(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [activatingId],
+  );
 
   // Ref to control the sheet programmatically (open/close/snapTo)
   const bottomSheetRef = useRef<BottomSheetModal | null>(null);
 
-  // Set ref callback to ensure ref is properly initialized
   const setBottomSheetRef = useCallback((node: BottomSheetModal | null) => {
     bottomSheetRef.current = node;
   }, []);
 
-  // Snap points: Add a very small snap point (5%) that will trigger close
-  // When dragged below 50%, it will snap to this small point and we'll close it immediately
   const snapPoints = useMemo(() => ["80%"], []);
 
-  // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
     close: () => {
       if (bottomSheetRef.current) {
@@ -69,27 +182,22 @@ const InventoryBottomSheet = React.forwardRef<
     present: () => {
       if (bottomSheetRef.current) {
         const modal = bottomSheetRef.current as any;
-        // Open the modal at its only snap point.
         if (modal.snapToIndex) {
           modal.snapToIndex(0);
         } else if (modal.present) {
-          // Fallback to present if it exists
           modal.present();
         }
       }
     },
   }));
 
-  // Control sheet open/close based on isOpen prop
   useEffect(() => {
     if (!bottomSheetRef.current) return;
 
     if (isOpen) {
-      // Small delay to ensure ref is mounted
       const timer = setTimeout(() => {
         if (bottomSheetRef.current) {
           const modal = bottomSheetRef.current as any;
-          // Open to the only configured snap point.
           if (modal.snapToIndex) {
             modal.snapToIndex(0);
           } else if (modal.present) {
@@ -103,20 +211,15 @@ const InventoryBottomSheet = React.forwardRef<
     }
   }, [isOpen]);
 
-  // Callback when sheet changes state
   const handleSheetChanges = useCallback(
     (index: number) => {
       if (index === -1) {
-        // Sheet is closed
         onClose();
       }
     },
     [onClose],
   );
 
-  // Renders the backdrop (dimmed background)
-  // appearsOnIndex={0} means it appears when sheet is at the first snap point
-  // disappearsOnIndex={-1} means it disappears when sheet is closed
   const renderBackdrop = useCallback(
     (props: any) => (
       <BottomSheetBackdrop
@@ -133,15 +236,13 @@ const InventoryBottomSheet = React.forwardRef<
     <BottomSheetModal
       ref={setBottomSheetRef}
       snapPoints={snapPoints}
-      index={-1} // Start closed until isOpen becomes true
-      enablePanDownToClose={true} // Allow user to swipe down to close
-      backdropComponent={renderBackdrop} // Custom backdrop
+      index={-1}
+      enablePanDownToClose={true}
+      backdropComponent={renderBackdrop}
       onChange={handleSheetChanges}
-      backgroundStyle={{ backgroundColor: "#061013" }} // Custom background color
-      handleIndicatorStyle={{ backgroundColor: "#CCCCCC", width: 40 }} // Custom handle
+      backgroundStyle={{ backgroundColor: "#061013" }}
+      handleIndicatorStyle={{ backgroundColor: "#CCCCCC", width: 40 }}
     >
-      {/* Use BottomSheetView for simple content that doesn't scroll */}
-      {/* Use BottomSheetFlatList or BottomSheetScrollView for scrollable content */}
       <BottomSheetView style={styles.sheetContent}>
         <View style={styles.contentContainer}>
           <View style={styles.TopBar}>
@@ -152,15 +253,7 @@ const InventoryBottomSheet = React.forwardRef<
             </TouchableOpacity>
           </View>
           <View style={styles.statusContainer}>
-            <View style={styles.boostContainer}>
-              <View style={styles.boostIconContainer}>
-                <BoostIcon width={32} height={32} />
-                <View style={styles.boostTextContainer}>
-                  <Text style={styles.boostLabel}>2X BOOST ACTIVE: </Text>
-                  <Text style={styles.boostTime}>3:24:34 remaining</Text>
-                </View>
-              </View>
-            </View>
+            <BoostBanner boost={liveBoost} />
             <View style={styles.passContainer}>
               <Svg
                 style={styles.gradientOverlay}
@@ -192,16 +285,13 @@ const InventoryBottomSheet = React.forwardRef<
                 <View style={styles.passIconContainer}>
                   <Image
                     source={GoldPass}
-                    style={[
-                      styles.inventoryItemIcon,
-                      isGoldPassIconGreyedOut && styles.greyedOutIcon,
-                    ]}
+                    style={[styles.inventoryItemIcon, styles.greyedOutIcon]}
                   />
                 </View>
                 <View style={styles.passTextContainer}>
-                  <Text style={styles.passLabel}>GOLD PASS</Text>
+                  <Text style={styles.passLabel}>NO PASS ACTIVE</Text>
                   <Text style={styles.passDescription}>
-                    20% boost to all progression for 30 days
+                    Passes are coming to Tyren soon
                   </Text>
                 </View>
                 <RightArrowIcon width={32} height={32} />
@@ -238,17 +328,21 @@ const InventoryBottomSheet = React.forwardRef<
                 <View style={styles.passContainerContent}>
                   <View style={styles.passIconContainer}>
                     <Image
-                      source={Chainbreaker}
+                      source={hasChainbreaker ? Chainbreaker : ChainbreakerGrey}
                       style={[
                         styles.inventoryItemIcon,
-                        isChainbreakerIconGreyedOut && styles.greyedOutIcon,
+                        !hasChainbreaker && styles.greyedOutIcon,
                       ]}
                     />
                   </View>
                   <View style={styles.passTextContainer}>
-                    <Text style={styles.passLabel}>NO LEVEL ITEM</Text>
+                    <Text style={styles.passLabel}>
+                      {hasChainbreaker ? "CHAINBREAKER" : "NO LEVEL ITEM"}
+                    </Text>
                     <Text style={styles.passDescription}>
-                      Unlock a level exclusive boost
+                      {hasChainbreaker
+                        ? "Break Zalthar's Chains once you complete the level"
+                        : "Unlock a level exclusive boost"}
                     </Text>
                   </View>
                   <RightArrowIcon width={32} height={32} />
@@ -258,9 +352,29 @@ const InventoryBottomSheet = React.forwardRef<
           </View>
         </View>
         <View style={styles.gridContainer}>
-          {Array.from({ length: 12 }).map((_, i) => (
-            <View key={i} style={styles.gridCellWrapper}>
-              <GridCell boostRate={2} boostTime={4} Icon={BoostIcon} />
+          {ownedBoosters.map(({ item, quantity }) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.gridCellWrapper}
+              activeOpacity={0.8}
+              onPress={() => handleActivate(item)}
+            >
+              <GridCell
+                boostRate={item.effect.value}
+                boostTime={Math.round((item.effect.duration_ms ?? 0) / 3_600_000)}
+                Icon={BoostIcon}
+              >
+                {quantity > 1 ? (
+                  <Text style={styles.quantityBadge}>×{quantity}</Text>
+                ) : null}
+              </GridCell>
+            </TouchableOpacity>
+          ))}
+          {Array.from({
+            length: Math.max(0, GRID_SLOTS - ownedBoosters.length),
+          }).map((_, i) => (
+            <View key={`empty-${i}`} style={styles.gridCellWrapper}>
+              <GridCell />
             </View>
           ))}
         </View>
@@ -357,31 +471,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontFamily: "OpenSans",
   },
-  boostHeader: {
-    fontSize: 16,
-    fontWeight: "regular",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
-  },
-  boostIconTextContainer: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    width: "100%",
-    gap: 8,
-  },
-  boostIconHeader: {
-    fontSize: 16,
-    fontWeight: "regular",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
-  },
-  boostIconSubheader: {
-    fontSize: 12,
-    fontWeight: "regular",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
-  },
   passContainer: {
     borderRadius: 16,
     height: 104,
@@ -436,17 +525,6 @@ const styles = StyleSheet.create({
     opacity: 0.3,
     tintColor: "#8A8A8A",
   },
-
-  passArrowContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    height: "100%",
-  },
-  passArrowPlaceholder: {
-    width: 37,
-    height: 16,
-  },
   chainbreakerContainer: {
     borderRadius: 16,
     height: 104,
@@ -464,5 +542,13 @@ const styles = StyleSheet.create({
   gridCellWrapper: {
     width: "23%",
     alignItems: "center",
+  },
+  quantityBadge: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    fontFamily: "OpenSans",
+    textAlign: "right",
+    width: "100%",
   },
 });

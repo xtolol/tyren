@@ -10,8 +10,14 @@ Deno.serve(async (req: Request) => {
   if (!userId) return errorResponse('Unauthorized', 401)
 
   const db = adminClient()
+  const nowIso = new Date().toISOString()
 
-  const [{ data: profile, error: profileError }, { data: activeSession }] = await Promise.all([
+  const [
+    { data: profile, error: profileError },
+    { data: activeSession },
+    { data: inventory },
+    { data: activeBoosts },
+  ] = await Promise.all([
     db.from('player_profiles').select('*').eq('user_id', userId).single(),
     db
       .from('focus_sessions')
@@ -19,9 +25,24 @@ Deno.serve(async (req: Request) => {
       .eq('user_id', userId)
       .eq('status', 'active')
       .maybeSingle(),
+    db
+      .from('player_inventory')
+      .select('item_id, quantity')
+      .eq('user_id', userId)
+      .gt('quantity', 0),
+    db
+      .from('active_boosts')
+      .select('id, item_id, effect, started_at, expires_at')
+      .eq('user_id', userId)
+      .gt('expires_at', nowIso),
   ])
 
   if (profileError) return errorResponse('Profile not found', 404)
 
-  return jsonResponse({ profile, active_session: activeSession ?? null })
+  return jsonResponse({
+    profile,
+    active_session: activeSession ?? null,
+    inventory: inventory ?? [],
+    active_boosts: activeBoosts ?? [],
+  })
 })

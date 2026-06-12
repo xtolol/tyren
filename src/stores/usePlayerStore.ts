@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { ActiveBoost, InventoryEntry, PurchaseResponse, ActivateBoostResponse } from '../lib/api';
 import type { CurrencyType } from '../core/rewards/types';
 
 interface PlayerStore {
@@ -15,6 +16,9 @@ interface PlayerStore {
   totalBossesDefeated: number;
   currentStreak: number;
   longestStreak: number;
+  // item_id → quantity owned; server-authoritative, mirrored on sync
+  inventory: Record<string, number>;
+  activeBoosts: ActiveBoost[];
 
   addCurrency: (type: CurrencyType, amount: number) => void;
   addXp: (amount: number) => void;
@@ -36,6 +40,9 @@ interface PlayerStore {
     total_focus_time_ms: number;
     current_streak: number; longest_streak: number;
   }) => void;
+  setInventoryState: (inventory: InventoryEntry[], boosts: ActiveBoost[]) => void;
+  applyPurchase: (result: PurchaseResponse) => void;
+  applyBoostActivation: (result: ActivateBoostResponse) => void;
   reset: () => void;
 }
 
@@ -55,6 +62,8 @@ export const usePlayerStore = create<PlayerStore>()(
       totalBossesDefeated: 0,
       currentStreak: 0,
       longestStreak: 0,
+      inventory: {},
+      activeBoosts: [],
 
       addCurrency: (type, amount) => {
         set((state) => ({
@@ -120,12 +129,42 @@ export const usePlayerStore = create<PlayerStore>()(
         });
       },
 
+      setInventoryState: (inventory, boosts) => {
+        set({
+          inventory: Object.fromEntries(inventory.map((e) => [e.item_id, e.quantity])),
+          activeBoosts: boosts,
+        });
+      },
+
+      applyPurchase: (result) => {
+        set((state) => ({
+          dust: result.dust,
+          shards: result.shards,
+          totalItemsBought: state.totalItemsBought + 1,
+          // Dust packs convert instantly (quantity 0): nothing enters
+          // the inventory.
+          inventory: result.quantity > 0
+            ? { ...state.inventory, [result.item_id]: result.quantity }
+            : state.inventory,
+        }));
+      },
+
+      applyBoostActivation: (result) => {
+        set((state) => {
+          const inventory = { ...state.inventory };
+          if (result.quantity > 0) inventory[result.item_id] = result.quantity;
+          else delete inventory[result.item_id];
+          return { inventory, activeBoosts: [...state.activeBoosts, result.boost] };
+        });
+      },
+
       reset: () => {
         set({
           dust: 0, shards: 0, level: 1, xp: 0,
           xpToNextLevel: XP_PER_LEVEL, progressPercent: 0,
           totalFocusTimeMs: 0, totalItemsBought: 0, totalBossesDefeated: 0,
           currentStreak: 0, longestStreak: 0,
+          inventory: {}, activeBoosts: [],
         });
       },
 
