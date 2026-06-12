@@ -8,8 +8,9 @@ import { useFocusTimerStore } from './useFocusTimerStore';
 async function syncFromServer() {
   const localSessionId = useFocusTimerStore.getState().sessionId;
   try {
-    const { profile, active_session } = await api.player.state();
+    const { profile, active_session, inventory, active_boosts } = await api.player.state();
     usePlayerStore.getState().hydrate(profile);
+    usePlayerStore.getState().setInventoryState(inventory ?? [], active_boosts ?? []);
     if (active_session) {
       useFocusTimerStore.getState().resumeFromServer(
         active_session.id,

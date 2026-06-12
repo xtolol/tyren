@@ -1,5 +1,4 @@
 import { useFocusTimerStore } from '../stores/useFocusTimerStore';
-import { usePlayerStore } from '../stores/usePlayerStore';
 
 function formatTime(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -11,8 +10,6 @@ function formatTime(ms: number): string {
 export function useFocusTimer() {
   const { status, elapsedMs, targetDurationMs, loading, error, start, stop: stopTimer, reset } =
     useFocusTimerStore();
-
-  const { applySessionResult } = usePlayerStore();
 
   const isRunning = status === 'running';
 
@@ -31,12 +28,9 @@ export function useFocusTimer() {
   const startTarget = (durationMs: number) => start('target', durationMs);
 
   const stop = async () => {
+    // The store mirrors the server's totals into the player store itself
+    // (it also handles forfeits triggered by the AppState leave policy).
     const result = await stopTimer();
-    if (result) {
-      // The server already applied rewards atomically — mirror its totals
-      // instead of re-deriving them with the client's own level curve.
-      applySessionResult(result);
-    }
     return result?.rewards ?? null;
   };
 

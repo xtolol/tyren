@@ -44,6 +44,8 @@ export interface StopSessionResponse {
   session_id: string;
   elapsed_ms: number;
   completed: boolean;
+  forfeited: boolean;
+  rewarded_ms: number;
   rewards: SessionRewards;
   level: number;
   new_xp: number;
@@ -81,9 +83,57 @@ export interface ActiveSession {
   started_at: string;
 }
 
+export type ShopCategory = 'pass' | 'level_item' | 'booster' | 'dust_pack' | 'shard_pack';
+
+export interface ShopItemEffect {
+  type?: 'reward_multiplier' | 'grant_dust' | 'grant_shards' | 'key_item';
+  value?: number;
+  amount?: number;
+  duration_ms?: number;
+}
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  description: string;
+  category: ShopCategory;
+  price: number;
+  currency: 'dust' | 'shards' | 'gbp';
+  effect: ShopItemEffect;
+  sort_order: number;
+}
+
+export interface InventoryEntry {
+  item_id: string;
+  quantity: number;
+}
+
+export interface ActiveBoost {
+  id: string;
+  item_id: string;
+  effect: ShopItemEffect;
+  started_at: string;
+  expires_at: string;
+}
+
+export interface PurchaseResponse {
+  item_id: string;
+  dust: number;
+  shards: number;
+  quantity: number;
+}
+
+export interface ActivateBoostResponse {
+  item_id: string;
+  quantity: number;
+  boost: ActiveBoost;
+}
+
 export interface PlayerStateResponse {
   profile: PlayerProfile;
   active_session: ActiveSession | null;
+  inventory: InventoryEntry[];
+  active_boosts: ActiveBoost[];
 }
 
 // ---- API client ----
@@ -93,11 +143,41 @@ export const api = {
     start: (mode: 'freeform' | 'target', target_ms?: number, idempotencyKey?: string) =>
       invoke<StartSessionResponse>('sessions-start', { mode, target_ms }, idempotencyKey),
 
-    stop: (session_id: string, idempotencyKey?: string) =>
-      invoke<StopSessionResponse>('sessions-stop', { session_id }, idempotencyKey),
+    stop: (session_id: string, idempotencyKey?: string, forfeited = false) =>
+      invoke<StopSessionResponse>(
+        'sessions-stop',
+        // getTimezoneOffset lets the server count streak days in the
+        // user's local calendar instead of UTC.
+        { session_id, tz_offset_minutes: new Date().getTimezoneOffset(), forfeited },
+        idempotencyKey,
+      ),
+
+    heartbeat: (session_id: string) =>
+      invoke<{ ok: boolean }>('sessions-heartbeat', { session_id }),
   },
 
   player: {
     state: () => invoke<PlayerStateResponse>('player-state'),
+  },
+
+  shop: {
+    // Catalog reads go straight through RLS (active items only); all
+    // mutations go through edge functions.
+    catalog: async (): Promise<ShopItem[]> => {
+      const { data, error } = await supabase
+        .from('shop_items')
+        .select('id, name, description, category, price, currency, effect, sort_order')
+        .order('sort_order');
+      if (error) throw new Error(error.message);
+      return (data ?? []) as ShopItem[];
+    },
+
+    purchase: (item_id: string, idempotencyKey?: string) =>
+      invoke<PurchaseResponse>('shop-purchase', { item_id }, idempotencyKey),
+  },
+
+  boosts: {
+    activate: (item_id: string) =>
+      invoke<ActivateBoostResponse>('boosts-activate', { item_id }),
   },
 };

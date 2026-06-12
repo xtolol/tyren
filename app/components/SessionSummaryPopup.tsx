@@ -9,6 +9,7 @@ interface SessionSummaryPopupProps {
   elapsedMs: number;
   rewards: SessionRewards;
   onContinue: () => void;
+  variant?: 'complete' | 'forfeited';
 }
 
 function formatSessionTime(ms: number): string {
@@ -27,7 +28,10 @@ export default function SessionSummaryPopup({
   elapsedMs,
   rewards,
   onContinue,
+  variant = 'complete',
 }: SessionSummaryPopupProps) {
+  const forfeited = variant === 'forfeited';
+
   return (
     <Modal
       transparent
@@ -37,38 +41,49 @@ export default function SessionSummaryPopup({
     >
       <View style={styles.overlay}>
         <View style={styles.card}>
-          <Text style={styles.title}>Session Complete</Text>
+          <Text style={styles.title}>
+            {forfeited ? 'Session Broken' : 'Session Complete'}
+          </Text>
           <Text style={styles.time}>{formatSessionTime(elapsedMs)}</Text>
 
           <View style={styles.divider} />
 
-          <View style={styles.rewards}>
-            <View style={styles.rewardRow}>
-              <DustIcon width={16} height={16} />
-              <Text style={styles.rewardLabel}>Time Dust</Text>
-              <Text style={[styles.rewardValue, styles.dustColor]}>
-                +{rewards.dust}
-              </Text>
+          {forfeited ? (
+            <Text style={styles.forfeitMessage}>
+              You left Tyren for too long and Zalthar reclaimed this
+              session. Your streak is safe — but the time earned nothing.
+            </Text>
+          ) : (
+            <View style={styles.rewards}>
+              <View style={styles.rewardRow}>
+                <DustIcon width={16} height={16} />
+                <Text style={styles.rewardLabel}>Time Dust</Text>
+                <Text style={[styles.rewardValue, styles.dustColor]}>
+                  +{rewards.dust}
+                </Text>
+              </View>
+              <View style={styles.rewardRow}>
+                <ShardIcon width={16} height={16} />
+                <Text style={styles.rewardLabel}>Time Shards</Text>
+                <Text style={[styles.rewardValue, styles.shardColor]}>
+                  +{rewards.shards}
+                </Text>
+              </View>
+              <View style={styles.rewardRow}>
+                <Text style={styles.rewardLabel}>XP</Text>
+                <Text style={styles.rewardValue}>+{rewards.xp}</Text>
+              </View>
             </View>
-            <View style={styles.rewardRow}>
-              <ShardIcon width={16} height={16} />
-              <Text style={styles.rewardLabel}>Time Shards</Text>
-              <Text style={[styles.rewardValue, styles.shardColor]}>
-                +{rewards.shards}
-              </Text>
-            </View>
-            <View style={styles.rewardRow}>
-              <Text style={styles.rewardLabel}>XP</Text>
-              <Text style={styles.rewardValue}>+{rewards.xp}</Text>
-            </View>
-          </View>
+          )}
 
           <TouchableOpacity
             style={styles.button}
             onPress={onContinue}
             activeOpacity={0.8}
           >
-            <Text style={styles.buttonText}>Collect</Text>
+            <Text style={styles.buttonText}>
+              {forfeited ? 'Continue' : 'Collect'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -114,6 +129,14 @@ const styles = StyleSheet.create({
   rewards: {
     width: "100%",
     gap: 16,
+    marginBottom: 28,
+  },
+  forfeitMessage: {
+    fontSize: 14,
+    fontFamily: "OpenSans",
+    color: "rgba(255,255,255,0.75)",
+    textAlign: "center",
+    lineHeight: 22,
     marginBottom: 28,
   },
   rewardRow: {

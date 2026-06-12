@@ -4,6 +4,9 @@ import { corsResponse, jsonResponse, errorResponse } from './shared/http.ts'
 import { getUserId } from './shared/auth.ts'
 
 const MAX_SESSION_MS = 14_400_000 // 4 hours
+// Active sessions older than the cap plus this grace are corpses from a
+// dead client; abandon them (no rewards) instead of blocking new starts.
+const STALE_SESSION_GRACE_MS = 3_600_000 // 1 hour
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse()
@@ -36,13 +39,27 @@ Deno.serve(async (req: Request) => {
 
   const { data: existingSession } = await db
     .from('focus_sessions')
-    .select('id')
+    .select('id, started_at')
     .eq('user_id', userId)
     .eq('status', 'active')
     .maybeSingle()
 
   if (existingSession) {
-    return errorResponse('An active session already exists. Stop it first.', 409)
+    const ageMs = Date.now() - new Date(existingSession.started_at).getTime()
+    if (ageMs <= MAX_SESSION_MS + STALE_SESSION_GRACE_MS) {
+      return errorResponse('An active session already exists. Stop it first.', 409)
+    }
+    // Same sweep the hourly cron job performs, done inline so the user
+    // never waits on it to start focusing again.
+    const { error: abandonError } = await db
+      .from('focus_sessions')
+      .update({
+        status: 'abandoned',
+        ended_at: new Date(new Date(existingSession.started_at).getTime() + MAX_SESSION_MS).toISOString(),
+      })
+      .eq('id', existingSession.id)
+      .eq('status', 'active')
+    if (abandonError) return errorResponse(abandonError.message, 500)
   }
 
   const { data: session, error: sessionError } = await db

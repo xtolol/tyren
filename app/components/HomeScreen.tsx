@@ -2,6 +2,7 @@ import InventoryIcon from "@/assets/images/inventory-32px.svg";
 import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
 import { useFocusTimer } from "@/src/hooks/useFocusTimer";
+import { useFocusTimerStore } from "@/src/stores/useFocusTimerStore";
 import { usePlayerStore } from "@/src/stores/usePlayerStore";
 import { useFonts } from "expo-font";
 import { VideoView, useVideoPlayer } from "expo-video";
@@ -53,6 +54,8 @@ export default function HomeScreen() {
 
   const { isRunning, loading, error: timerError, elapsedMs, stop, startFreeform } = useFocusTimer();
   const { progressPercent, level } = usePlayerStore();
+  const forfeitNotice = useFocusTimerStore((s) => s.forfeitNotice);
+  const clearForfeitNotice = useFocusTimerStore((s) => s.clearForfeitNotice);
 
   type SessionResult = { elapsedMs: number; dust: number; shards: number; xp: number };
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
@@ -173,6 +176,10 @@ export default function HomeScreen() {
         </View>
         {timerError ? (
           <Text style={styles.timerError}>{timerError}</Text>
+        ) : isRunning ? (
+          <Text style={styles.stakeHint}>
+            Keep Tyren open — leaving longer than 30s breaks the session
+          </Text>
         ) : null}
       </View>
       <InventoryBottomSheet
@@ -195,6 +202,14 @@ export default function HomeScreen() {
           xp: sessionResult?.xp ?? 0,
         }}
         onContinue={() => setSessionResult(null)}
+      />
+
+      <SessionSummaryPopup
+        visible={forfeitNotice !== null}
+        variant="forfeited"
+        elapsedMs={forfeitNotice?.elapsedMs ?? 0}
+        rewards={{ dust: 0, shards: 0, xp: 0 }}
+        onContinue={clearForfeitNotice}
       />
     </View>
   );
@@ -254,6 +269,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'OpenSans',
     color: '#FF6B6B',
+    textAlign: 'center',
+    marginTop: -16,
+  },
+  stakeHint: {
+    fontSize: 12,
+    fontFamily: 'OpenSans',
+    color: 'rgba(255,255,255,0.45)',
     textAlign: 'center',
     marginTop: -16,
   },
