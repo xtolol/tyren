@@ -1,16 +1,12 @@
-import BoostIcon from "@/assets/images/booster-48px.svg";
-import ChainbreakerGrey from "@/assets/images/chainbreaker-48px-grey.png";
-import Chainbreaker from "@/assets/images/chainbreaker-48px.png";
-import GoldPass from "@/assets/images/goldpass-48px-grey.png";
-import RightArrowIcon from "@/assets/images/right-32px.svg";
-import CloseIcon from "@/assets/images/x-24px.svg";
+import { formatPerkBonus } from "@/src/core/relics";
 import type { ActiveBoost, ShopItem } from "@/src/lib/api";
 import { api } from "@/src/lib/api";
+import { useMapStore } from "@/src/stores/useMapStore";
 import { usePlayerStore } from "@/src/stores/usePlayerStore";
-
-import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
-
-import GridCell from "./GridCell";
+import { equippedRelics, useRelicStore } from "@/src/stores/useRelicStore";
+import { fonts, palette, sealColors } from "@/src/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 import BottomSheetModal, {
   BottomSheetBackdrop,
@@ -26,7 +22,6 @@ import React, {
 } from "react";
 import {
   Alert,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -43,7 +38,7 @@ export interface InventoryBottomSheetRef {
   present: () => void;
 }
 
-const GRID_SLOTS = 12;
+const GRID_SLOTS = 8;
 
 function formatRemaining(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -68,21 +63,23 @@ function BoostBanner({ boost }: { boost: ActiveBoost | null }) {
 
   return (
     <View style={styles.boostContainer}>
-      <View style={styles.boostIconContainer}>
-        <BoostIcon width={32} height={32} />
-        {boost && remainingMs > 0 ? (
-          <View style={styles.boostTextContainer}>
-            <Text style={styles.boostLabel}>
-              {boost.effect.value ?? "?"}X BOOST ACTIVE:{" "}
-            </Text>
-            <Text style={styles.boostTime}>
-              {formatRemaining(remainingMs)} remaining
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.boostLabel}>NO ACTIVE BOOST</Text>
-        )}
-      </View>
+      <Ionicons
+        name="hourglass-outline"
+        size={20}
+        color={boost && remainingMs > 0 ? palette.gold : palette.textFaint}
+      />
+      {boost && remainingMs > 0 ? (
+        <View style={styles.boostTextContainer}>
+          <Text style={styles.boostLabel}>
+            {boost.effect.value ?? "?"}× BOOST ACTIVE
+          </Text>
+          <Text style={styles.boostTime}>{formatRemaining(remainingMs)}</Text>
+        </View>
+      ) : (
+        <Text style={[styles.boostLabel, { color: palette.textFaint }]}>
+          NO ACTIVE BOOST
+        </Text>
+      )}
     </View>
   );
 }
@@ -91,8 +88,11 @@ const InventoryBottomSheet = React.forwardRef<
   InventoryBottomSheetRef,
   InventoryBottomSheetProps
 >(({ isOpen, onClose }, ref) => {
+  const router = useRouter();
   const inventory = usePlayerStore((s) => s.inventory);
   const activeBoosts = usePlayerStore((s) => s.activeBoosts);
+  const relics = useRelicStore((s) => s.relics);
+  const locations = useMapStore((s) => s.locations);
 
   // Catalog provides names/effects for owned item ids.
   const [catalog, setCatalog] = useState<ShopItem[] | null>(null);
@@ -134,7 +134,7 @@ const InventoryBottomSheet = React.forwardRef<
     [inventory, itemsById],
   );
 
-  const hasChainbreaker = (inventory["chainbreaker"] ?? 0) > 0;
+  const equipped = equippedRelics(relics);
 
   const handleActivate = useCallback(
     (item: ShopItem) => {
@@ -181,12 +181,7 @@ const InventoryBottomSheet = React.forwardRef<
     },
     present: () => {
       if (bottomSheetRef.current) {
-        const modal = bottomSheetRef.current as any;
-        if (modal.snapToIndex) {
-          modal.snapToIndex(0);
-        } else if (modal.present) {
-          modal.present();
-        }
+        bottomSheetRef.current.snapToIndex(0);
       }
     },
   }));
@@ -197,12 +192,7 @@ const InventoryBottomSheet = React.forwardRef<
     if (isOpen) {
       const timer = setTimeout(() => {
         if (bottomSheetRef.current) {
-          const modal = bottomSheetRef.current as any;
-          if (modal.snapToIndex) {
-            modal.snapToIndex(0);
-          } else if (modal.present) {
-            modal.present();
-          }
+          bottomSheetRef.current.snapToIndex(0);
         }
       }, 10);
       return () => clearTimeout(timer);
@@ -226,7 +216,7 @@ const InventoryBottomSheet = React.forwardRef<
         {...props}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
-        opacity={0.5}
+        opacity={0.6}
       />
     ),
     [],
@@ -240,141 +230,87 @@ const InventoryBottomSheet = React.forwardRef<
       enablePanDownToClose={true}
       backdropComponent={renderBackdrop}
       onChange={handleSheetChanges}
-      backgroundStyle={{ backgroundColor: "#061013" }}
-      handleIndicatorStyle={{ backgroundColor: "#CCCCCC", width: 40 }}
+      backgroundStyle={{ backgroundColor: palette.bgRaised }}
+      handleIndicatorStyle={{ backgroundColor: palette.goldDim, width: 40 }}
     >
       <BottomSheetView style={styles.sheetContent}>
-        <View style={styles.contentContainer}>
-          <View style={styles.TopBar}>
-            <View style={styles.placeholderLeft}></View>
-            <Text style={styles.title}>Inventory</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <CloseIcon width={24} height={24} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.statusContainer}>
-            <BoostBanner boost={liveBoost} />
-            <View style={styles.passContainer}>
-              <Svg
-                style={styles.gradientOverlay}
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                pointerEvents="none"
-              >
-                <Defs>
-                  <RadialGradient
-                    id={"invPassGrad"}
-                    cx="70"
-                    cy="100"
-                    r="70"
-                    gradientUnits="userSpaceOnUse"
-                  >
-                    <Stop offset="0%" stopColor="#006E93" />
-                    <Stop offset="100%" stopColor="#00222D" />
-                  </RadialGradient>
-                </Defs>
-                <Rect
-                  x="-1"
-                  y="-1"
-                  width="102"
-                  height="102"
-                  fill="url(#invPassGrad)"
-                />
-              </Svg>
-              <View style={styles.passContainerContent}>
-                <View style={styles.passIconContainer}>
-                  <Image
-                    source={GoldPass}
-                    style={[styles.inventoryItemIcon, styles.greyedOutIcon]}
-                  />
-                </View>
-                <View style={styles.passTextContainer}>
-                  <Text style={styles.passLabel}>NO PASS ACTIVE</Text>
-                  <Text style={styles.passDescription}>
-                    Passes are coming to Tyren soon
-                  </Text>
-                </View>
-                <RightArrowIcon width={32} height={32} />
-              </View>
-            </View>
-            <View>
-              <View style={styles.chainbreakerContainer}>
-                <Svg
-                  style={styles.gradientOverlay}
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                  pointerEvents="none"
-                >
-                  <Defs>
-                    <RadialGradient
-                      id="invChainbreakerGrad"
-                      cx="70"
-                      cy="100"
-                      r="70"
-                      gradientUnits="userSpaceOnUse"
-                    >
-                      <Stop offset="0%" stopColor="#4C0093" />
-                      <Stop offset="100%" stopColor="#17002D" />
-                    </RadialGradient>
-                  </Defs>
-                  <Rect
-                    x="-1"
-                    y="-1"
-                    width="102"
-                    height="102"
-                    fill="url(#invChainbreakerGrad)"
-                  />
-                </Svg>
-                <View style={styles.passContainerContent}>
-                  <View style={styles.passIconContainer}>
-                    <Image
-                      source={hasChainbreaker ? Chainbreaker : ChainbreakerGrey}
-                      style={[
-                        styles.inventoryItemIcon,
-                        !hasChainbreaker && styles.greyedOutIcon,
-                      ]}
-                    />
-                  </View>
-                  <View style={styles.passTextContainer}>
-                    <Text style={styles.passLabel}>
-                      {hasChainbreaker ? "CHAINBREAKER" : "NO LEVEL ITEM"}
-                    </Text>
-                    <Text style={styles.passDescription}>
-                      {hasChainbreaker
-                        ? "Break Zalthar's Chains once you complete the level"
-                        : "Unlock a level exclusive boost"}
-                    </Text>
-                  </View>
-                  <RightArrowIcon width={32} height={32} />
-                </View>
-              </View>
-            </View>
-          </View>
+        <View style={styles.topBar}>
+          <View style={styles.placeholderLeft} />
+          <Text style={styles.title}>Inventory</Text>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <Ionicons name="close" size={20} color={palette.text} />
+          </TouchableOpacity>
         </View>
+
+        <BoostBanner boost={liveBoost} />
+
+        {/* Equipped perks (the loadout, mirrored from the relic store) */}
+        <Text style={styles.sectionCaption}>EQUIPPED PERKS</Text>
+        {equipped.length > 0 ? (
+          <View style={styles.perkRow}>
+            {equipped.map(([locationId, relic]) => {
+              const location = locations.find((l) => l.id === locationId);
+              const color = sealColors[relic.seal];
+              return (
+                <TouchableOpacity
+                  key={locationId}
+                  style={[styles.perkCard, { borderColor: color }]}
+                  onPress={() => {
+                    onClose();
+                    router.push("/loadout" as never);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.perkDiamond, { backgroundColor: color }]} />
+                  <Text style={styles.perkName}>{location?.perk_name ?? "Perk"}</Text>
+                  <Text style={[styles.perkBonus, { color }]}>
+                    {formatPerkBonus(relic.seal)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.noPerks}
+            onPress={() => {
+              onClose();
+              router.push("/codex" as never);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.noPerksText}>
+              No perks equipped — claim a relic to unlock one
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={palette.textFaint} />
+          </TouchableOpacity>
+        )}
+
+        {/* Consumables */}
+        <Text style={styles.sectionCaption}>CONSUMABLES</Text>
         <View style={styles.gridContainer}>
           {ownedBoosters.map(({ item, quantity }) => (
             <TouchableOpacity
               key={item.id}
-              style={styles.gridCellWrapper}
+              style={styles.gridCell}
               activeOpacity={0.8}
               onPress={() => handleActivate(item)}
             >
-              <GridCell
-                boostRate={item.effect.value}
-                boostTime={Math.round((item.effect.duration_ms ?? 0) / 3_600_000)}
-                Icon={BoostIcon}
-              >
-                {quantity > 1 ? (
-                  <Text style={styles.quantityBadge}>×{quantity}</Text>
-                ) : null}
-              </GridCell>
+              <Text style={styles.gridDuration}>
+                {Math.round((item.effect.duration_ms ?? 0) / 3_600_000)}h
+              </Text>
+              <Ionicons name="hourglass-outline" size={24} color={palette.gold} />
+              <Text style={styles.gridValue}>{item.effect.value}×</Text>
+              {quantity > 1 ? (
+                <Text style={styles.quantityBadge}>×{quantity}</Text>
+              ) : null}
             </TouchableOpacity>
           ))}
           {Array.from({
             length: Math.max(0, GRID_SLOTS - ownedBoosters.length),
           }).map((_, i) => (
-            <View key={`empty-${i}`} style={styles.gridCellWrapper}>
-              <GridCell />
+            <View key={`empty-${i}`} style={[styles.gridCell, styles.gridCellEmpty]}>
+              <View style={styles.emptyDiamond} />
             </View>
           ))}
         </View>
@@ -393,20 +329,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 6,
     paddingBottom: 48,
-    alignItems: "center",
+    gap: 14,
   },
   title: {
     fontSize: 32,
-    fontWeight: "regular",
-    color: "#FFFFFF",
-    fontFamily: "InstrumentSerif-Regular",
+    color: palette.text,
+    fontFamily: fonts.serif,
   },
-  TopBar: {
+  topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
-    height: 40,
+    height: 48,
   },
   closeButton: {
     padding: 8,
@@ -414,141 +349,139 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 32,
     height: 32,
-    backgroundColor: "#00222D",
+    backgroundColor: palette.card,
     borderRadius: 100,
   },
   placeholderLeft: {
     width: 32,
     height: 32,
   },
-  contentContainer: {
-    flex: 1,
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 24,
-  },
-  statusContainer: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    width: "100%",
-    gap: 8,
-  },
   boostContainer: {
     flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "flex-start",
-    width: "100%",
-    backgroundColor: "#1A1A1A",
-    gap: 8,
-    borderRadius: 100,
-    height: 48,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  boostIconContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-start",
     alignItems: "center",
-    gap: 8,
+    width: "100%",
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.hairline,
+    gap: 10,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   boostTextContainer: {
+    flex: 1,
     flexDirection: "row",
-    justifyContent: "flex-start",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: 0,
   },
   boostLabel: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
+    fontSize: 11,
+    fontFamily: fonts.pixelBold,
+    color: palette.text,
+    letterSpacing: 1,
   },
   boostTime: {
-    fontSize: 14,
-    fontWeight: "regular",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
+    fontSize: 11,
+    fontFamily: fonts.pixel,
+    color: palette.gold,
   },
-  passContainer: {
-    borderRadius: 16,
-    height: 104,
-    width: "100%",
-    overflow: "hidden",
+  sectionCaption: {
+    fontSize: 8,
+    fontFamily: fonts.pixel,
+    letterSpacing: 2,
+    color: palette.goldDim,
+    marginTop: 6,
   },
-  passContainerContent: {
+  perkRow: {
     flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    width: "100%",
-    gap: 4,
-    height: "100%",
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    gap: 10,
   },
-  gradientOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  passTextContainer: {
-    flexDirection: "column",
+  perkCard: {
     flex: 1,
-    flexShrink: 1,
-    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: palette.card,
   },
-  passLabel: {
-    fontSize: 14,
-    letterSpacing: 0.6,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
-    lineHeight: 20,
+  perkDiamond: {
+    width: 7,
+    height: 7,
+    transform: [{ rotate: "45deg" }],
   },
-  passDescription: {
-    fontSize: 14,
-    fontWeight: "regular",
-    color: "#CCCCCC",
-    fontFamily: "OpenSans",
+  perkName: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: fonts.ui,
+    fontWeight: "700",
+    color: palette.text,
   },
-  passIconContainer: {
-    paddingHorizontal: 16,
+  perkBonus: {
+    fontSize: 9,
+    fontFamily: fonts.pixel,
   },
-  inventoryItemIcon: {
-    width: 48,
-    height: 48,
+  noPerks: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: palette.hairline,
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: palette.card,
   },
-  greyedOutIcon: {
-    opacity: 0.3,
-    tintColor: "#8A8A8A",
-  },
-  chainbreakerContainer: {
-    borderRadius: 16,
-    height: 104,
-    width: "100%",
-    overflow: "hidden",
+  noPerksText: {
+    fontSize: 13,
+    fontFamily: fonts.ui,
+    color: palette.textDim,
   },
   gridContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
     width: "100%",
-    marginTop: 24,
     justifyContent: "space-between",
   },
-  gridCellWrapper: {
+  gridCell: {
     width: "23%",
+    aspectRatio: 1,
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.hairline,
+    borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  gridCellEmpty: {
+    backgroundColor: "transparent",
+  },
+  emptyDiamond: {
+    width: 8,
+    height: 8,
+    transform: [{ rotate: "45deg" }],
+    borderWidth: 1,
+    borderColor: palette.hairline,
+  },
+  gridDuration: {
+    fontSize: 7,
+    fontFamily: fonts.pixel,
+    color: palette.textFaint,
+  },
+  gridValue: {
+    fontSize: 10,
+    fontFamily: fonts.pixelBold,
+    color: palette.goldBright,
   },
   quantityBadge: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
-    textAlign: "right",
-    width: "100%",
+    position: "absolute",
+    bottom: 6,
+    right: 8,
+    fontSize: 8,
+    fontFamily: fonts.pixel,
+    color: palette.textDim,
   },
 });

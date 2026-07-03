@@ -221,6 +221,69 @@ Replaces the abstract single `progress_percent` bar (and the level-gated, chainb
 
 ---
 
+## Phase 8 — The Relic redesign (approach 2: Sigil) — ✅ SHIPPED 2026-07-04
+
+Design pivot agreed 2026-07-03 (Hassan + Marcus): visual direction **1B "Sigil"** (gold
+relic-crest cards, procedural SVG — no illustrator), extended with the **Relic system**
+(mock 2A). No leaderboard for MVP; the backend stays server-authoritative (anti-cheat).
+
+### Mechanics
+- **Relics.** Defeating a location's boss leaves behind that location's relic at
+  **Bronze Seal**, auto-equipped if a loadout slot is free. One relic per location,
+  defined on `map_locations` (`relic_name`, `perk_name`, `relic_flavor`).
+- **Seals (mini-progression).** Bronze → Silver → Gold → Mythic. Each *qualifying*
+  session (≥25 verified min — the streak bar) credits +1 attuned session to every
+  **equipped** relic. Rank-up thresholds: Silver 3, Gold 6, Mythic 12 sessions.
+- **Perks.** A relic's perk is a passive **map-progression multiplier while equipped**
+  (fragments + boss damage, never currency): Bronze +0.05×, Silver +0.08×,
+  Gold +0.12×, Mythic +0.20×. Purchased boosters stay currency-only — money buys
+  currency, mastery buys progression.
+- **Loadout.** 2 slots, any owned relics; bonuses sum (2 Mythics = 1.40×).
+  `set_relic_loadout` RPC + `relics-loadout` edge function.
+- **Seal-gated shop.** `shop_items` gains `required_location_id` + `required_seal`;
+  `purchase_item` refuses below-rank buys (`seal_rank_required`). Level-exclusive items
+  seeded per location; old `chainbreaker` item retired (`active = false`).
+
+### Server
+- `player_relics` (user, location, rank, rank_sessions, equipped_slot 1|2, RLS own-row
+  select, zero client writes). `complete_focus_session` applies the equipped perk
+  multiplier to the map-progress ms, grants the relic on a boss kill, credits attuned
+  sessions on qualifying stops, and returns a `relics` block (+ `relic_earned` in `map`).
+  `player-state` returns `relics`. Seal constants live in `shared/economy.ts` with tests.
+
+### Client (visual refactor — gold Sigil direction)
+- `src/theme.ts` gold palette + Silkscreen pixel font (numerals/labels) + Instrument Serif.
+- **Home**: procedural relic-crest card centerpiece (hex crest + rays + progress seal),
+  pixel top bar (dust · TYREN · shards), rank track (BRZ/SLV/GLD/MYT), equipped-perk chip,
+  gold Focus button; **boss stage** flips to the ember-red variant (HP in pixel numerals,
+  segmented header). Video background dropped.
+- **Screens**: Game Map (gold card list), Relic detail, Relic Codex, Loadout,
+  Rank-up moment. Shop/Inventory sheets restyled (level-item section w/ seal locks,
+  equipped-perks row). Session summary reports relic earned / attunement / rank-ups.
+
+### Status (2026-07-04) — all shipped & verified
+- Migrations `phase8_relic_system` + `phase8_pin_seal_helper_search_path` applied
+  remotely; `sessions-stop` v15, `player-state` v11, `relics-loadout` v1 deployed.
+- Live-verified on the test account (176edfee…): Warden kill → Bronze relic
+  auto-equip + auto-advance; 1.05× perk on gate accrual (30 min → 1 fragment + 90s
+  banked); 3rd qualifying session → Silver rank-up; loadout RPC; `chain_draught`
+  purchasable at Silver while `sundering_sigil` (Gold) and `abyssal_tonic`
+  (unowned relic) correctly raise `seal_rank_required`.
+- 38 deno tests green (seal math added); `tsc` + lint clean; advisors at baseline.
+- Client: Home rebuilt around the procedural crest card (gate/boss states, ember
+  boss variant, rank-up moment queue); Map/Codex/Loadout/Relic-detail/Profile/Auth
+  all in the gold system; Silkscreen pixel font bundled (OFL); video background,
+  `MapProgressHeader`, `ProgressBar`, `GridCell`, chainbreaker UI all removed.
+
+### Follow-ups
+- [ ] Settings screen from the design set (blocked apps, session length,
+  auto-start, notifications toggles) — most rows need Track B / notification prefs.
+- [ ] In-app smoke test on a device (start/stop, relic moment, loadout swap).
+- [ ] Target-session UI (server supports `mode: 'target'`; Home only starts freeform).
+- [ ] Retune seal thresholds (3/6/12) and level-item prices after playtesting —
+  data-only (`relic_seal_sessions_required` + `shop_items`).
+- [ ] Victory state for clearing Zalthar's Throne (carried from Phase 7).
+
 ## Cross-cutting rules (apply from Phase 0 onward)
 
 1. **Every currency/XP mutation goes through `currency_ledger`/`reward_ledger`** via a locked-down RPC. No exceptions — this is already the codebase's best property; keep it.

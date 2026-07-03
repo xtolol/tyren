@@ -12,6 +12,7 @@ import {
 } from '../lib/notifications';
 import { useMapStore } from './useMapStore';
 import { usePlayerStore } from './usePlayerStore';
+import { useRelicStore } from './useRelicStore';
 
 // ---- Focus contract (Track A — see PLAN.md Phase 2) ----
 // The deal: keep Tyren open while you focus. The screen stays awake so
@@ -145,6 +146,7 @@ export const useFocusTimerStore = create<FocusTimerStore>((set, get) => ({
       // totals instead of re-deriving them with a client-side curve.
       usePlayerStore.getState().applySessionResult(result);
       if (result.map) useMapStore.getState().applyMapResult(result.map);
+      useRelicStore.getState().applySessionRelics(result.relics ?? []);
       // A qualifying session today satisfies the streak, so the server
       // returns today as the focus day and the reminder moves to tomorrow
       // evening. A short session leaves last_focus_date untouched.

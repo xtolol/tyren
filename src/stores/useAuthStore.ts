@@ -6,17 +6,19 @@ import { supabase } from '../lib/supabase';
 import { useFocusTimerStore } from './useFocusTimerStore';
 import { useMapStore } from './useMapStore';
 import { usePlayerStore } from './usePlayerStore';
+import { useRelicStore } from './useRelicStore';
 
 async function syncFromServer() {
   const localSessionId = useFocusTimerStore.getState().sessionId;
   useMapStore.getState().loadLocations();
   try {
-    const { profile, active_session, inventory, active_boosts, map_progress, entitlements, recap } = await api.player.state();
+    const { profile, active_session, inventory, active_boosts, map_progress, relics, entitlements, recap } = await api.player.state();
     usePlayerStore.getState().hydrate(profile);
     usePlayerStore.getState().setInventoryState(inventory ?? [], active_boosts ?? []);
     usePlayerStore.getState().setEntitlements(entitlements ?? []);
     if (recap) usePlayerStore.getState().setWeeklyRecap(recap);
     useMapStore.getState().setProgress(map_progress ?? []);
+    useRelicStore.getState().setRelics(relics ?? []);
     // Keep the evening streak-at-risk reminder aligned with the server's
     // view of the streak each time we sync.
     scheduleStreakReminder({ streak: profile.current_streak, lastFocusDate: profile.last_focus_date });
@@ -95,6 +97,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     useFocusTimerStore.getState().reset();
     usePlayerStore.getState().reset();
     useMapStore.getState().reset();
+    useRelicStore.getState().reset();
     await supabase.auth.signOut();
     set({ session: null, user: null });
   },

@@ -95,6 +95,7 @@ Deno.serve(async (req: Request) => {
       rewards:             { dust: 0, shards: 0, xp: 0 },
       rewarded_ms:         0,
       map:                 null,
+      relics:              [],
       qualifies:           false,
       freezes_consumed:    0,
       freezes_earned:      0,
@@ -175,6 +176,8 @@ Deno.serve(async (req: Request) => {
     p_streak:     streak,
     p_focus_date: focusDate,
     p_streak_freezes: newFreezeBalance,
+    // Qualifying sessions (≥25 verified min) also attune equipped relics.
+    p_qualifies:  qualifies,
   })
 
   if (rpcError) return errorResponse(rpcError.message, 500)

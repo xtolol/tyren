@@ -1,5 +1,3 @@
-import MaskedView from '@react-native-masked-view/masked-view';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -13,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useAuthStore } from '@/src/stores/useAuthStore';
+import { fonts, palette } from '@/src/theme';
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -60,19 +59,7 @@ export default function AuthScreen() {
     >
       <View style={styles.inner}>
         {/* Logo */}
-        <MaskedView
-          maskElement={<Text style={styles.logo}>TYREN</Text>}
-          style={styles.maskedView}
-        >
-          <LinearGradient
-            colors={['#C7E3ED', '#39A5C9']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.gradient}
-          >
-            <Text style={[styles.logo, { opacity: 0 }]}>TYREN</Text>
-          </LinearGradient>
-        </MaskedView>
+        <Text style={styles.logo}>TYREN</Text>
 
         <Text style={styles.subtitle}>
           {mode === 'signin' ? 'Welcome back' : 'Create your account'}
@@ -141,7 +128,7 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'black',
+    backgroundColor: palette.bg,
   },
   inner: {
     flex: 1,
@@ -149,38 +136,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 12,
   },
-  maskedView: {
-    height: 56,
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  gradient: {
-    flex: 1,
-    justifyContent: 'center',
-  },
   logo: {
-    fontSize: 48,
-    fontFamily: 'InstrumentSerif-Regular',
+    fontSize: 34,
+    fontFamily: fonts.pixelBold,
+    letterSpacing: 6,
+    color: palette.gold,
     textAlign: 'center',
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    fontFamily: 'OpenSans',
-    color: 'rgba(255,255,255,0.6)',
+    fontFamily: fonts.ui,
+    color: palette.textDim,
     textAlign: 'center',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: palette.bgRaised,
+    borderWidth: 1,
+    borderColor: palette.hairline,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 15,
-    fontFamily: 'OpenSans',
-    color: 'white',
+    fontFamily: fonts.ui,
+    color: palette.text,
   },
   primaryButton: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: palette.bgRaised,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
     borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
@@ -188,26 +173,26 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     fontSize: 16,
-    fontFamily: 'OpenSans',
-    color: 'white',
+    fontFamily: fonts.ui,
+    color: palette.text,
   },
   toggleText: {
     fontSize: 13,
-    fontFamily: 'OpenSans',
-    color: 'rgba(255,255,255,0.45)',
+    fontFamily: fonts.ui,
+    color: palette.textFaint,
     textAlign: 'center',
     marginTop: 4,
   },
   error: {
     fontSize: 13,
-    fontFamily: 'OpenSans',
-    color: '#FF6B6B',
+    fontFamily: fonts.ui,
+    color: palette.danger,
     textAlign: 'center',
   },
   success: {
     fontSize: 13,
-    fontFamily: 'OpenSans',
-    color: '#39A5C9',
+    fontFamily: fonts.ui,
+    color: palette.gold,
     textAlign: 'center',
   },
 });

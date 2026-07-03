@@ -1,10 +1,8 @@
 import DustIcon from '@/assets/images/dust-16px.svg';
-import ResultsIcon from '@/assets/images/results-32px.svg';
-import SettingsIcon from '@/assets/images/settings-32px.svg';
 import ShardIcon from '@/assets/images/shard-16px.svg';
 import { usePlayerStore } from '@/src/stores/usePlayerStore';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { LinearGradient } from 'expo-linear-gradient';
+import { fonts, palette } from '@/src/theme';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -19,77 +17,62 @@ function formatCurrency(value: number): string {
   return value.toString();
 }
 
-export default function NavBar() {
+// The pixel top bar (design 1B): map · dust · TYREN · shards · stats.
+// The ember variant recolors the wordmark during a boss fight.
+export default function NavBar({ variant = 'gold' }: { variant?: 'gold' | 'ember' }) {
   const { dust, shards } = usePlayerStore();
   const router = useRouter();
+  const accent = variant === 'ember' ? palette.ember : palette.gold;
 
   return (
     <View style={styles.container}>
-      <SettingsIcon width={32} height={32} />
-      <View style={styles.iconContainer}>
+      <TouchableOpacity onPress={() => router.push('/map' as never)} hitSlop={8}>
+        <Ionicons name="map-outline" size={22} color={palette.textDim} />
+      </TouchableOpacity>
+      <View style={styles.currency}>
         <DustIcon width={16} height={16} />
         <Text style={styles.dust}>{formatCurrency(dust)}</Text>
       </View>
-      <MaskedView
-        maskElement={<Text style={styles.title}>TYREN</Text>}
-        style={styles.maskedView}
-      >
-        <LinearGradient
-          colors={['#C7E3ED', '#39A5C9']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.gradient}
-        >
-          <Text style={[styles.title, { opacity: 0 }]}>TYREN</Text>
-        </LinearGradient>
-      </MaskedView>
-      <View style={styles.iconContainer}>
+      <Text style={[styles.title, { color: accent }]}>TYREN</Text>
+      <View style={styles.currency}>
         <ShardIcon width={16} height={16} />
         <Text style={styles.shard}>{formatCurrency(shards)}</Text>
       </View>
-      <TouchableOpacity onPress={() => router.push('/profile')}>
-        <ResultsIcon width={32} height={32} />
+      <TouchableOpacity onPress={() => router.push('/profile')} hitSlop={8}>
+        <Ionicons name="stats-chart-outline" size={20} color={palette.textDim} />
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 32,
-    fontWeight: 'regular',
-    fontFamily: 'OpenSans',
-  },
   container: {
     paddingTop: 65,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     backgroundColor: 'transparent',
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  iconContainer: {
+  title: {
+    fontSize: 20,
+    fontFamily: fonts.pixelBold,
+    letterSpacing: 4,
+  },
+  currency: {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 1,
   },
   dust: {
-    fontSize: 14,
-    fontWeight: 'regular',
-    color: '#FBC647',
-    fontFamily: 'OpenSans',
+    fontSize: 10,
+    color: palette.dust,
+    fontFamily: fonts.pixel,
   },
   shard: {
-    fontSize: 14,
-    fontWeight: 'regular',
-    color: '#C34DB0',
-    fontFamily: 'OpenSans',
-  },
-  maskedView: {
-    height: 40,
-  },
-  gradient: {
-    flex: 1,
-    justifyContent: 'center',
+    fontSize: 10,
+    color: palette.shards,
+    fontFamily: fonts.pixel,
   },
 });

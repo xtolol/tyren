@@ -40,6 +40,39 @@ export interface StartSessionResponse {
   target_ms: number | null;
 }
 
+// ---- Relics (Phase 8) ----
+
+export type SealRank = 'bronze' | 'silver' | 'gold' | 'mythic';
+
+// A relic the player owns, as stored in player_relics.
+export interface PlayerRelicEntry {
+  location_id: string;
+  seal: SealRank;
+  seal_sessions: number;
+  equipped_slot: 1 | 2 | null;
+  earned_at: string;
+}
+
+// Per-relic outcome of a session stop (all owned relics, post-attunement).
+export interface RelicResult {
+  location_id: string;
+  relic_name: string;
+  perk_name: string;
+  seal: SealRank;
+  seal_sessions: number;
+  equipped_slot: 1 | 2 | null;
+  ranked_up: boolean;
+}
+
+// The relic left behind by a freshly defeated boss.
+export interface RelicEarned {
+  location_id: string;
+  relic_name: string;
+  perk_name: string;
+  seal: SealRank;
+  auto_equipped: boolean;
+}
+
 // The map outcome of a session. In the gate stage it reports fragment
 // accrual; in the boss stage, damage dealt and (on the kill) the auto-advance
 // to the next location. null only on a forfeited session.
@@ -61,6 +94,10 @@ export interface MapResult {
   defeated: boolean;
   // Set to the next location id when the killing blow auto-advanced the path.
   advanced_to: string | null;
+  // The equipped-perk multiplier applied to this session's map progress.
+  perk_multiplier: number;
+  // Set when the killing blow granted this location's relic.
+  relic_earned: RelicEarned | null;
   rewards: SessionRewards;
 }
 
@@ -73,6 +110,8 @@ export interface StopSessionResponse {
   rewards: SessionRewards;
   // Map progress at the current location; null when forfeited.
   map: MapResult | null;
+  // All owned relics after this session's attunement; [] when forfeited.
+  relics: RelicResult[];
   level: number;
   new_xp: number;
   xp_to_next_level: number;
@@ -123,7 +162,7 @@ export interface ActiveSession {
 export type ShopCategory = 'pass' | 'level_item' | 'booster' | 'dust_pack' | 'shard_pack';
 
 export interface ShopItemEffect {
-  type?: 'reward_multiplier' | 'grant_dust' | 'grant_shards' | 'key_item';
+  type?: 'reward_multiplier' | 'grant_dust' | 'grant_shards' | 'grant_streak_freeze' | 'key_item';
   value?: number;
   amount?: number;
   duration_ms?: number;
@@ -138,6 +177,9 @@ export interface ShopItem {
   currency: 'dust' | 'shards' | 'gbp';
   effect: ShopItemEffect;
   sort_order: number;
+  // Level-exclusive items: buying demands this location's relic at the seal.
+  required_location_id: string | null;
+  required_seal: SealRank | null;
 }
 
 export interface InventoryEntry {
@@ -158,6 +200,7 @@ export interface PurchaseResponse {
   dust: number;
   shards: number;
   quantity: number;
+  streak_freezes: number;
 }
 
 export interface ActivateBoostResponse {
@@ -188,6 +231,10 @@ export interface MapLocation {
   fragment_name: string;
   fragments_required: number;
   boss: MapBoss | null;
+  // The relic this location leaves behind (and its perk + codex flavor text).
+  relic_name: string;
+  perk_name: string;
+  relic_flavor: string;
 }
 
 // Only reached locations have an entry; everything else is locked or
@@ -237,8 +284,21 @@ export interface PlayerStateResponse {
   inventory: InventoryEntry[];
   active_boosts: ActiveBoost[];
   map_progress: MapProgressEntry[];
+  relics: PlayerRelicEntry[];
   entitlements: Entitlement[];
   recap: WeeklyRecap;
+}
+
+// Result of setting the perk loadout: all owned relics with fresh slots.
+export interface LoadoutResponse {
+  relics: {
+    location_id: string;
+    relic_name: string;
+    perk_name: string;
+    seal: SealRank;
+    seal_sessions: number;
+    equipped_slot: 1 | 2 | null;
+  }[];
 }
 
 // ---- API client ----
@@ -271,7 +331,7 @@ export const api = {
     catalog: async (): Promise<ShopItem[]> => {
       const { data, error } = await supabase
         .from('shop_items')
-        .select('id, name, description, category, price, currency, effect, sort_order')
+        .select('id, name, description, category, price, currency, effect, sort_order, required_location_id, required_seal')
         .order('sort_order');
       if (error) throw new Error(error.message);
       return (data ?? []) as ShopItem[];
@@ -292,7 +352,7 @@ export const api = {
     locations: async (): Promise<MapLocation[]> => {
       const { data, error } = await supabase
         .from('map_locations')
-        .select('id, name, region_id, position_x, position_y, unlock_level, sort_order, gate_label, fragment_name, fragments_required, boss')
+        .select('id, name, region_id, position_x, position_y, unlock_level, sort_order, gate_label, fragment_name, fragments_required, boss, relic_name, perk_name, relic_flavor')
         .order('sort_order');
       if (error) throw new Error(error.message);
       return (data ?? []) as MapLocation[];
@@ -302,5 +362,12 @@ export const api = {
     // no target — the server acts on wherever the player currently stands.
     breakGate: (idempotencyKey?: string) =>
       invoke<BreakGateResponse>('map-break-gate', {}, idempotencyKey),
+  },
+
+  relics: {
+    // Sets the two-perk loadout: an ordered array of 0–2 owned location
+    // ids (slot 1 first). Naturally idempotent, so no idempotency key.
+    setLoadout: (slots: string[]) =>
+      invoke<LoadoutResponse>('relics-loadout', { slots }),
   },
 };

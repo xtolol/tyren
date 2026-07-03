@@ -23,6 +23,7 @@ Deno.serve(async (req: Request) => {
     { data: inventory },
     { data: activeBoosts },
     { data: mapProgress },
+    { data: relics },
     { data: weekRewards },
     { data: weekStops },
     { data: entitlements },
@@ -47,6 +48,10 @@ Deno.serve(async (req: Request) => {
     db
       .from('player_map_progress')
       .select('location_id, status, stage, fragments_collected, fragment_progress_ms, boss_hp_remaining')
+      .eq('user_id', userId),
+    db
+      .from('player_relics')
+      .select('location_id, seal, seal_sessions, equipped_slot, earned_at')
       .eq('user_id', userId),
     db
       .from('reward_ledger')
@@ -87,6 +92,7 @@ Deno.serve(async (req: Request) => {
     inventory: inventory ?? [],
     active_boosts: activeBoosts ?? [],
     map_progress: mapProgress ?? [],
+    relics: relics ?? [],
     entitlements: entitlements ?? [],
     recap,
   })

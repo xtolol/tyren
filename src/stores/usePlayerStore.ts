@@ -174,9 +174,10 @@ export const usePlayerStore = create<PlayerStore>()(
         set((state) => ({
           dust: result.dust,
           shards: result.shards,
+          streakFreezes: result.streak_freezes ?? state.streakFreezes,
           totalItemsBought: state.totalItemsBought + 1,
           // Dust packs convert instantly (quantity 0): nothing enters
-          // the inventory.
+          // the inventory. Streak-freeze grants land on the profile.
           inventory: result.quantity > 0
             ? { ...state.inventory, [result.item_id]: result.quantity }
             : state.inventory,

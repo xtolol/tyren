@@ -1,14 +1,15 @@
+import Crest from '@/app/components/sigil/Crest';
 import DustIcon from '@/assets/images/dust-16px.svg';
 import ShardIcon from '@/assets/images/shard-16px.svg';
-import { usePlayerStore } from '@/src/stores/usePlayerStore';
-import { useMapStore } from '@/src/stores/useMapStore';
+import { SEAL_LABELS } from '@/src/core/relics';
 import { useAuthStore } from '@/src/stores/useAuthStore';
+import { useMapStore } from '@/src/stores/useMapStore';
+import { usePlayerStore } from '@/src/stores/usePlayerStore';
+import { equippedRelics, useRelicStore } from '@/src/stores/useRelicStore';
+import { fonts, palette, sealColors, sealColorsDim } from '@/src/theme';
 import { Ionicons } from '@expo/vector-icons';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { VideoView, useVideoPlayer } from 'expo-video';
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   ScrollView,
   Share,
@@ -62,36 +63,23 @@ export default function ProfileScreen() {
 
   const locations = useMapStore((s) => s.locations);
   const mapProgress = useMapStore((s) => s.progress);
-  const currentLocationName =
-    locations.find((l) => mapProgress[l.id]?.status === 'current')?.name ?? "Zalthar's Hold";
+  const relics = useRelicStore((s) => s.relics);
+  const current = locations.find((l) => mapProgress[l.id]?.status === 'current');
 
-  const username = (user?.user_metadata?.username as string | undefined) ?? user?.email ?? 'Player';
+  // The profile crest wears the primary equipped relic; before the first
+  // relic it shows the current location's seal-in-waiting.
+  const primary = equippedRelics(relics)[0] ?? null;
+  const primaryLocation = primary ? locations.find((l) => l.id === primary[0]) : null;
+  const crestColor = primary ? sealColors[primary[1].seal] : palette.gold;
+  const crestDim = primary ? sealColorsDim[primary[1].seal] : palette.goldFaint;
+  const relicCount = Object.keys(relics).length;
+
+  const username = (user?.user_metadata?.username as string | undefined) ?? user?.email ?? 'Seeker';
 
   const handleSignOut = async () => {
     await signOut();
     router.replace('/auth' as never);
   };
-
-  const player = useVideoPlayer(
-    require('@/assets/images/videos/1.mp4'),
-    (player) => {
-      player.loop = true;
-      player.muted = true;
-    },
-  );
-
-  useEffect(() => {
-    player.play();
-    return () => {
-      try {
-        if (player) {
-          player.pause();
-        }
-      } catch {
-        // Player may have already been cleaned up
-      }
-    };
-  }, [player]);
 
   const handleShare = async () => {
     const message = [
@@ -100,9 +88,9 @@ export default function ProfileScreen() {
       `Level: ${level}`,
       `Focus streak: ${currentStreak} day${currentStreak === 1 ? '' : 's'}`,
       `Time focused: ${formatFocusTime(totalFocusTimeMs)}`,
+      `Relics claimed: ${relicCount}`,
       `Dust earned: ${formatCurrency(dust)}`,
       `Shards collected: ${formatCurrency(shards)}`,
-      `Items bought: ${totalItemsBought}`,
       `Bosses defeated: ${totalBossesDefeated}`,
     ].join('\n');
 
@@ -119,40 +107,36 @@ export default function ProfileScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={28} color="white" />
+            <Ionicons name="chevron-back" size={28} color={palette.text} />
           </TouchableOpacity>
-          <MaskedView
-            maskElement={<Text style={styles.headerTitle}>TYREN</Text>}
-            style={styles.maskedView}
-          >
-            <LinearGradient
-              colors={['#C7E3ED', '#39A5C9']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.gradient}
-            >
-              <Text style={[styles.headerTitle, { opacity: 0 }]}>TYREN</Text>
-            </LinearGradient>
-          </MaskedView>
+          <Text style={styles.headerTitle}>TYREN</Text>
           <View style={{ width: 28 }} />
         </View>
 
-        {/* Your Results Title */}
         <Text style={styles.resultsTitle}>Your Results</Text>
 
-        {/* Character Card */}
+        {/* Seeker card: the equipped relic crest as the avatar */}
         <View style={styles.characterCard}>
-          <View style={styles.videoContainer}>
-            <VideoView
-              style={styles.characterVideo}
-              player={player}
-              contentFit="cover"
-              nativeControls={false}
-            />
-          </View>
-          <Text style={styles.characterName}>{currentLocationName}</Text>
-          <Text style={styles.characterLevel}>LVL {level}</Text>
-          <Text style={styles.usernameText}>{username}</Text>
+          <Crest
+            size={140}
+            progress={null}
+            color={crestColor}
+            dimColor={crestDim}
+            glyphIndex={primaryLocation?.sort_order ?? current?.sort_order ?? 0}
+          />
+          <Text style={styles.characterName}>{username}</Text>
+          <Text style={styles.characterLevel}>
+            {primary && primaryLocation
+              ? `${primaryLocation.relic_name.toUpperCase()} · ${SEAL_LABELS[primary[1].seal].toUpperCase()}`
+              : current
+                ? `LVL ${current.sort_order + 1} · ${current.name.toUpperCase()}`
+                : 'THE REALM LIES QUIET'}
+          </Text>
+          <TouchableOpacity onPress={() => router.push('/codex' as never)} hitSlop={8}>
+            <Text style={styles.codexLink}>
+              {relicCount} relic{relicCount === 1 ? '' : 's'} claimed · open the Codex →
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Share + Sign Out */}
@@ -160,7 +144,6 @@ export default function ProfileScreen() {
           <Text style={styles.shareButtonText}>Share profile</Text>
         </TouchableOpacity>
 
-        {/* Sign Out */}
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <Text style={styles.signOutText}>Sign out</Text>
         </TouchableOpacity>
@@ -168,7 +151,7 @@ export default function ProfileScreen() {
         {/* This Week recap */}
         {weeklyRecap && weeklyRecap.sessions > 0 && (
           <View style={styles.recapCard}>
-            <Text style={styles.recapTitle}>This week</Text>
+            <Text style={styles.recapTitle}>THIS WEEK</Text>
             <Text style={styles.recapHeadline}>
               You reclaimed {formatFocusTime(weeklyRecap.focus_ms)}
             </Text>
@@ -216,6 +199,10 @@ export default function ProfileScreen() {
             <Text style={styles.statValue}>{formatFocusTime(totalFocusTimeMs)}</Text>
           </View>
           <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Relics claimed</Text>
+            <Text style={styles.statValue}>{relicCount}</Text>
+          </View>
+          <View style={styles.statRow}>
             <View style={styles.statLabelRow}>
               <DustIcon width={16} height={16} />
               <Text style={styles.statLabel}>Time dust earned</Text>
@@ -246,7 +233,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'black',
+    backgroundColor: palette.bg,
   },
   scrollContent: {
     paddingBottom: 48,
@@ -259,63 +246,52 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: 'regular',
-    fontFamily: 'OpenSans',
-  },
-  maskedView: {
-    height: 40,
-  },
-  gradient: {
-    flex: 1,
-    justifyContent: 'center',
+    fontSize: 18,
+    fontFamily: fonts.pixelBold,
+    letterSpacing: 4,
+    color: palette.gold,
   },
   resultsTitle: {
     fontSize: 32,
-    fontFamily: 'InstrumentSerif-Regular',
-    color: 'white',
+    fontFamily: fonts.serif,
+    color: palette.text,
     textAlign: 'center',
     marginTop: 24,
     marginBottom: 16,
   },
   characterCard: {
-    backgroundColor: '#0A1A1F',
-    borderRadius: 16,
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    borderRadius: 20,
     marginHorizontal: 16,
-    padding: 16,
+    padding: 24,
     alignItems: 'center',
-  },
-  videoContainer: {
-    width: 180,
-    height: 240,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  characterVideo: {
-    width: '100%',
-    height: '100%',
+    gap: 6,
   },
   characterName: {
-    fontSize: 24,
-    fontFamily: 'InstrumentSerif-Regular',
-    color: 'white',
-    marginBottom: 4,
+    fontSize: 26,
+    fontFamily: fonts.serif,
+    color: palette.text,
+    marginTop: 8,
   },
   characterLevel: {
-    fontSize: 14,
-    fontFamily: 'OpenSans',
-    color: 'white',
-    opacity: 0.7,
+    fontSize: 8,
+    fontFamily: fonts.pixel,
+    letterSpacing: 2,
+    color: palette.goldDim,
+    textAlign: 'center',
   },
-  usernameText: {
+  codexLink: {
     fontSize: 12,
-    fontFamily: 'OpenSans',
-    color: 'rgba(255,255,255,0.45)',
-    marginTop: 2,
+    fontFamily: fonts.ui,
+    color: palette.textDim,
+    marginTop: 6,
   },
   shareButton: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: palette.bgRaised,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
     borderRadius: 100,
     marginHorizontal: 16,
     marginTop: 16,
@@ -324,8 +300,8 @@ const styles = StyleSheet.create({
   },
   shareButtonText: {
     fontSize: 16,
-    fontFamily: 'OpenSans',
-    color: 'white',
+    fontFamily: fonts.ui,
+    color: palette.text,
   },
   signOutButton: {
     borderRadius: 100,
@@ -336,28 +312,29 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     fontSize: 16,
-    fontFamily: 'OpenSans',
-    color: 'rgba(255,255,255,0.4)',
+    fontFamily: fonts.ui,
+    color: palette.textFaint,
   },
   recapCard: {
-    backgroundColor: '#0A1A1F',
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.hairline,
     borderRadius: 16,
     marginHorizontal: 16,
     marginTop: 24,
     padding: 20,
   },
   recapTitle: {
-    fontSize: 12,
-    fontFamily: 'OpenSans',
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontSize: 8,
+    fontFamily: fonts.pixel,
+    color: palette.goldDim,
+    letterSpacing: 2,
     marginBottom: 6,
   },
   recapHeadline: {
     fontSize: 24,
-    fontFamily: 'InstrumentSerif-Regular',
-    color: 'white',
+    fontFamily: fonts.serif,
+    color: palette.text,
     marginBottom: 16,
   },
   recapRow: {
@@ -369,16 +346,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   recapValue: {
-    fontSize: 20,
-    fontFamily: 'OpenSans',
-    fontWeight: '700',
-    color: 'white',
+    fontSize: 18,
+    fontFamily: fonts.pixelBold,
+    color: palette.text,
   },
   recapStatLabel: {
     fontSize: 11,
-    fontFamily: 'OpenSans',
-    color: 'rgba(255,255,255,0.45)',
-    marginTop: 2,
+    fontFamily: fonts.ui,
+    color: palette.textFaint,
+    marginTop: 4,
   },
   statsList: {
     marginTop: 24,
@@ -397,19 +373,18 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 14,
-    fontFamily: 'OpenSans',
-    color: 'white',
-    opacity: 0.7,
+    fontFamily: fonts.ui,
+    color: palette.textDim,
   },
   statValue: {
     fontSize: 14,
-    fontFamily: 'OpenSans',
-    color: 'white',
+    fontFamily: fonts.ui,
+    color: palette.text,
   },
   dustColor: {
-    color: '#FBC647',
+    color: palette.dust,
   },
   shardColor: {
-    color: '#C34DB0',
+    color: palette.shards,
   },
 });

@@ -294,3 +294,54 @@ Deno.test('same-day sessions never earn or spend freezes', () => {
   assertEquals(r.freezesConsumed, 0)
   assertEquals(r.freezesEarned, 0)
 })
+
+// ---- Relic seals (Phase 8) ----
+
+import {
+  attuneRelic,
+  perkMultiplier,
+  sessionsToNextSeal,
+  SEAL_PERK_BONUS,
+} from './economy.ts'
+
+Deno.test('perkMultiplier sums equipped seal bonuses onto 1', () => {
+  assertEquals(perkMultiplier([]), 1)
+  assertEquals(perkMultiplier(['bronze']), 1.05)
+  assertEquals(perkMultiplier(['bronze', 'silver']), 1.13)
+  assertEquals(perkMultiplier(['mythic', 'mythic']), 1.4)
+})
+
+Deno.test('perkMultiplier ignores seals beyond the two loadout slots', () => {
+  assertEquals(perkMultiplier(['mythic', 'mythic', 'mythic']), 1.4)
+})
+
+Deno.test('attuneRelic credits a session without ranking up early', () => {
+  assertEquals(attuneRelic('bronze', 0), { seal: 'bronze', sealSessions: 1, rankedUp: false })
+  assertEquals(attuneRelic('silver', 4), { seal: 'silver', sealSessions: 5, rankedUp: false })
+})
+
+Deno.test('attuneRelic ranks up at the threshold and restarts progress', () => {
+  assertEquals(attuneRelic('bronze', 2), { seal: 'silver', sealSessions: 0, rankedUp: true })
+  assertEquals(attuneRelic('silver', 5), { seal: 'gold', sealSessions: 0, rankedUp: true })
+  assertEquals(attuneRelic('gold', 11), { seal: 'mythic', sealSessions: 0, rankedUp: true })
+})
+
+Deno.test('attuneRelic cascades through multiple seals on a big credit', () => {
+  // 3 (bronze) + 6 (silver) + 12 (gold) = 21 sessions straight to mythic
+  assertEquals(attuneRelic('bronze', 0, 21), { seal: 'mythic', sealSessions: 0, rankedUp: true })
+  assertEquals(attuneRelic('bronze', 0, 23), { seal: 'mythic', sealSessions: 2, rankedUp: true })
+})
+
+Deno.test('mythic relics bank sessions without ranking further', () => {
+  assertEquals(attuneRelic('mythic', 7), { seal: 'mythic', sealSessions: 8, rankedUp: false })
+})
+
+Deno.test('sessionsToNextSeal counts down and is null at mythic', () => {
+  assertEquals(sessionsToNextSeal('bronze', 1), 2)
+  assertEquals(sessionsToNextSeal('gold', 12), 0)
+  assertEquals(sessionsToNextSeal('mythic', 0), null)
+})
+
+Deno.test('seal bonuses match the agreed schedule', () => {
+  assertEquals(SEAL_PERK_BONUS, { bronze: 0.05, silver: 0.08, gold: 0.12, mythic: 0.2 })
+})

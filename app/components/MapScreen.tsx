@@ -1,46 +1,31 @@
 import type { MapLocation } from "@/src/lib/api";
 import { api } from "@/src/lib/api";
 import { deriveLocationState, useMapStore } from "@/src/stores/useMapStore";
+import { useRelicStore } from "@/src/stores/useRelicStore";
+import { fonts, palette, sealColors } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import * as Crypto from "expo-crypto";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
+import Crest from "./sigil/Crest";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("screen");
-
-function Background() {
-  return (
-    <Svg
-      width={SCREEN_WIDTH}
-      height={SCREEN_HEIGHT}
-      style={StyleSheet.absoluteFillObject}
-    >
-      <Defs>
-        <RadialGradient id="bg" cx="70%" cy="80%" r="80%" fx="10%" fy="15%">
-          <Stop offset="0%" stopColor="#4C0093" />
-          <Stop offset="100%" stopColor="#17002D" />
-        </RadialGradient>
-      </Defs>
-      <Rect x="0" y="0" width={SCREEN_WIDTH} height={SCREEN_HEIGHT} fill="url(#bg)" />
-    </Svg>
-  );
-}
+// The Game Map (design row 3, gold): the location ladder as relic cards
+// chained by dotted connectors. The current card carries the live gate or
+// boss progress and the one manual action — breaking a ready gate.
 
 function DashedConnector() {
   return (
     <View style={styles.connector}>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <View key={i} style={styles.dash} />
+      {Array.from({ length: 4 }).map((_, i) => (
+        <View key={i} style={styles.connectorDot} />
       ))}
     </View>
   );
@@ -52,6 +37,7 @@ export default function MapScreen() {
   const progress = useMapStore((s) => s.progress);
   const loadLocations = useMapStore((s) => s.loadLocations);
   const applyBreakGate = useMapStore((s) => s.applyBreakGate);
+  const relics = useRelicStore((s) => s.relics);
   const [breaking, setBreaking] = useState(false);
 
   useEffect(() => {
@@ -76,14 +62,14 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <Background />
-
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
-          <Ionicons name="chevron-back" size={28} color="white" />
+          <Ionicons name="chevron-back" size={28} color={palette.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Game Map</Text>
-        <View style={{ width: 28 }} />
+        <TouchableOpacity onPress={() => router.push('/codex' as never)} hitSlop={8}>
+          <Ionicons name="albums-outline" size={22} color={palette.goldDim} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -94,42 +80,60 @@ export default function MapScreen() {
           const state = deriveLocationState(location, locations, progress);
           const entry = progress[location.id];
           const boss = location.boss;
+          const bossActive = state === "current" && entry?.stage === "boss" && !!boss;
+          const relic = relics[location.id];
 
           return (
             <View key={location.id}>
               <View
                 style={[
                   styles.card,
-                  state === "current" && styles.cardActive,
+                  state === "current" && (bossActive ? styles.cardBoss : styles.cardActive),
                   state === "locked" && styles.cardLocked,
                 ]}
               >
                 <View style={styles.cardRow}>
-                  <View style={styles.iconWrapper} />
+                  <View style={styles.crestWrap}>
+                    <Crest
+                      size={44}
+                      progress={null}
+                      color={
+                        state === "completed" && relic
+                          ? sealColors[relic.seal]
+                          : state === "current"
+                            ? (bossActive ? palette.ember : palette.gold)
+                            : "rgba(244,234,218,0.25)"
+                      }
+                      dimColor="transparent"
+                      glyphIndex={location.sort_order}
+                      hostile={bossActive}
+                    />
+                  </View>
                   <View style={styles.cardCenter}>
-                    <Text style={styles.levelName}>
+                    <Text style={styles.levelCaption}>LEVEL {location.sort_order + 1}</Text>
+                    <Text
+                      style={[
+                        styles.levelName,
+                        state === "locked" && { color: palette.textFaint },
+                      ]}
+                    >
                       {location.name.toUpperCase()}
                     </Text>
 
-                    {state === "current" && entry?.stage === "boss" && boss ? (
+                    {bossActive && boss ? (
                       <>
                         <View style={styles.progressTrack}>
                           <View
                             style={[
                               styles.bossFill,
                               {
-                                width: `${
-                                  ((entry.bossHpRemaining ?? boss.maxHp) /
-                                    boss.maxHp) *
-                                  100
-                                }%`,
+                                width: `${((entry?.bossHpRemaining ?? boss.maxHp) / boss.maxHp) * 100}%`,
                               },
                             ]}
                           />
                         </View>
                         <Text style={styles.subLabel}>
-                          {boss.bossName} — {entry.bossHpRemaining ?? boss.maxHp}/
-                          {boss.maxHp} HP
+                          {boss.bossName} — {entry?.bossHpRemaining ?? boss.maxHp}/{boss.maxHp} HP
                         </Text>
                       </>
                     ) : state === "current" ? (
@@ -140,7 +144,11 @@ export default function MapScreen() {
                         onBreak={breakGate}
                       />
                     ) : state === "completed" ? (
-                      <Text style={styles.subLabel}>Cleared</Text>
+                      <Text style={[styles.subLabel, relic && { color: sealColors[relic.seal] }]}>
+                        {relic
+                          ? `Cleared · ${location.relic_name} claimed`
+                          : "Cleared"}
+                      </Text>
                     ) : state === "next" ? (
                       <Text style={styles.subLabel}>
                         Sealed until you breach the gate before it
@@ -153,14 +161,18 @@ export default function MapScreen() {
                   </View>
                   <View style={styles.iconWrapper}>
                     {state === "completed" ? (
-                      <Ionicons name="checkmark-circle" size={24} color="#39A5C9" />
+                      <Ionicons name="checkmark-circle" size={22} color={palette.gold} />
                     ) : state === "current" ? (
-                      <Ionicons name="navigate" size={22} color="#39A5C9" />
+                      <Ionicons
+                        name="chevron-forward"
+                        size={20}
+                        color={bossActive ? palette.ember : palette.gold}
+                      />
                     ) : (
                       <Ionicons
                         name="lock-closed-outline"
-                        size={24}
-                        color="rgba(255,255,255,0.35)"
+                        size={20}
+                        color={palette.textFaint}
                       />
                     )}
                   </View>
@@ -220,7 +232,7 @@ function GateBody({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#07030F",
+    backgroundColor: palette.bg,
   },
   header: {
     paddingTop: 65,
@@ -232,8 +244,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 30,
-    fontFamily: "InstrumentSerif-Regular",
-    color: "white",
+    fontFamily: fonts.serif,
+    color: palette.text,
   },
   scrollContent: {
     paddingHorizontal: 24,
@@ -241,95 +253,106 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   card: {
-    backgroundColor: "#071E2E",
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: palette.card,
+    borderRadius: 16,
+    padding: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 20,
+    borderColor: palette.hairline,
   },
   cardActive: {
-    borderColor: "#39A5C9",
+    borderColor: palette.gold,
     borderWidth: 1.5,
-    backgroundColor: "#082535",
+    backgroundColor: "#20150A",
+  },
+  cardBoss: {
+    borderColor: palette.emberBorder,
+    borderWidth: 1.5,
+    backgroundColor: palette.emberCard,
   },
   cardLocked: {
-    opacity: 0.75,
+    opacity: 0.6,
   },
   cardRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+  },
+  crestWrap: {
+    width: 48,
+    alignItems: "center",
   },
   cardCenter: {
     flex: 1,
-    alignItems: "center",
-    gap: 6,
+    alignItems: "flex-start",
+    gap: 5,
+  },
+  levelCaption: {
+    fontSize: 8,
+    fontFamily: fonts.pixel,
+    letterSpacing: 2,
+    color: palette.goldDim,
   },
   levelName: {
-    fontSize: 18,
-    fontFamily: "OpenSans",
-    color: "white",
+    fontSize: 16,
+    fontFamily: fonts.ui,
+    color: palette.text,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
   progressTrack: {
-    width: "75%",
-    height: 11,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    width: "90%",
+    height: 9,
+    backgroundColor: "rgba(244,234,218,0.08)",
     borderRadius: 5,
     overflow: "hidden",
   },
   fragmentFill: {
     height: "100%",
-    backgroundColor: "#39A5C9",
+    backgroundColor: palette.gold,
     borderRadius: 5,
   },
   bossFill: {
     height: "100%",
-    backgroundColor: "#C34DB0",
+    backgroundColor: palette.ember,
     borderRadius: 5,
   },
   subLabel: {
     fontSize: 12,
-    fontFamily: "OpenSans",
-    color: "rgba(255,255,255,0.55)",
+    fontFamily: fonts.ui,
+    color: palette.textDim,
   },
   hintLabel: {
     fontSize: 12,
-    fontFamily: "OpenSans",
-    color: "rgba(255,255,255,0.4)",
+    fontFamily: fonts.ui,
+    color: palette.textFaint,
   },
   advanceButton: {
     marginTop: 4,
-    backgroundColor: "#0E3A4D",
-    borderColor: "#39A5C9",
+    backgroundColor: "#2A1B06",
+    borderColor: palette.gold,
     borderWidth: 1,
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 20,
   },
   advanceButtonText: {
-    color: "white",
+    color: palette.goldBright,
     fontSize: 14,
-    fontFamily: "OpenSans",
+    fontFamily: fonts.ui,
   },
   iconWrapper: {
-    width: 28,
+    width: 26,
     alignItems: "flex-end",
   },
   connector: {
     alignItems: "center",
-    paddingVertical: 4,
+    paddingVertical: 6,
     gap: 5,
   },
-  dash: {
-    width: 1.5,
-    height: 8,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    borderRadius: 1,
+  connectorDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: palette.goldDim,
   },
 });
