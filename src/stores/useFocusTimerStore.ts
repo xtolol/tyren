@@ -4,7 +4,15 @@ import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { api } from '../lib/api';
 import type { StopSessionResponse } from '../lib/api';
+import {
+  cancelSessionBreakWarning,
+  requestNotificationPermission,
+  scheduleSessionBreakWarning,
+  scheduleStreakReminder,
+} from '../lib/notifications';
+import { useMapStore } from './useMapStore';
 import { usePlayerStore } from './usePlayerStore';
+import { useRelicStore } from './useRelicStore';
 
 // ---- Focus contract (Track A — see PLAN.md Phase 2) ----
 // The deal: keep Tyren open while you focus. The screen stays awake so
@@ -109,6 +117,9 @@ export const useFocusTimerStore = create<FocusTimerStore>((set, get) => ({
       });
       startTicking((ms) => set({ elapsedMs: ms }));
       guardSession(session.session_id);
+      // Ask for notification permission contextually, on the first
+      // session — this is what powers the leave-warning and streak nudge.
+      requestNotificationPermission();
     } catch (err) {
       set({ loading: false, error: (err as Error).message });
     }
@@ -134,6 +145,17 @@ export const useFocusTimerStore = create<FocusTimerStore>((set, get) => ({
       // The server applied (or zeroed) rewards atomically — mirror its
       // totals instead of re-deriving them with a client-side curve.
       usePlayerStore.getState().applySessionResult(result);
+      if (result.map) useMapStore.getState().applyMapResult(result.map);
+      useRelicStore.getState().applySessionRelics(result.relics ?? []);
+      // A qualifying session today satisfies the streak, so the server
+      // returns today as the focus day and the reminder moves to tomorrow
+      // evening. A short session leaves last_focus_date untouched.
+      if (!result.forfeited && result.qualifies) {
+        scheduleStreakReminder({
+          streak: result.current_streak,
+          lastFocusDate: result.streak_focus_date,
+        });
+      }
       return result;
     } catch (err) {
       const message = (err as Error).message;
@@ -196,12 +218,18 @@ AppState.addEventListener('change', (state) => {
   const { status, sessionId, stop } = useFocusTimerStore.getState();
 
   if (state === 'background') {
-    if (status === 'running') _backgroundedAt = Date.now();
+    if (status === 'running') {
+      _backgroundedAt = Date.now();
+      // Warn from outside the app, since JS is suspended and can't pop
+      // its own UI. Cancelled the instant we come back within grace.
+      scheduleSessionBreakWarning();
+    }
     stopHeartbeats();
     return;
   }
 
   if (state === 'active') {
+    cancelSessionBreakWarning();
     const awayMs = _backgroundedAt ? Date.now() - _backgroundedAt : 0;
     _backgroundedAt = null;
     if (status !== 'running' || !sessionId) return;

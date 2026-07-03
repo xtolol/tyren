@@ -140,51 +140,149 @@ logic. Build the whole vertical slice in one pass: catalog → purchase → inve
 
 ---
 
-## Phase 4 — The game: map, bosses, progression
+## Phase 4 — The game: map, bosses, progression — ✅ SHIPPED (server + core client; onboarding deferred)
 
-The differentiator. `src/core/map/types.ts` and `mapData.json` already define the shapes — make the server own them.
+The differentiator. The server now owns the map.
 
-### 4.1 Schema + server loop
-- [ ] `map_locations` (seed from `mapData.json`: unlock_level, boss jsonb) and `player_map_progress` (user_id, location_id, status `locked|discovered|current|completed`, boss_hp_remaining).
-- [ ] Extend `complete_focus_session`: focus minutes → boss damage at the player's `current` location (e.g. 1 HP/min — tune). Boss HP ≤ 0 → mark completed, pay `rewardDust/Shards/Xp` through the existing ledgers, increment `total_bosses_defeated`, advance `current` to the next unlocked location.
-- [ ] **Define `progress_percent` once and for all:** per-location boss progress (HP dealt / max HP), resets when advancing. Replaces today's saturate-at-100-forever behavior. Migration to backfill/reset existing rows.
-- [ ] Chainbreaker (`level_items`): consuming it from inventory is what unlocks the next region after a boss falls — first real item effect, proves the Phase 3 inventory plumbing.
+### 4.1 Schema + server loop — ✅
+- [x] `map_locations` (seeded by migration from the old `mapData.json`, which is deleted) and `player_map_progress`. Only *reached* locations get a progress row (`current`/`completed`); locked/discovered are derived at read time from `unlock_level` + path order, so level-ups need no row maintenance. RLS: catalog readable by authenticated (like `shop_items`), progress own-row.
+- [x] `complete_focus_session` rebuilt: `p_progress` → `p_damage` (1 HP per **verified** minute, computed in `shared/economy.ts` `bossDamage()`; deliberately boost-immune — boosters buy currency, not world progress). Damage hits the boss at the `current` location; at 0 HP it pays `rewardDust/Shards/Xp` through `reward_ledger` (+`currency_ledger`, reason `boss_defeated:<loc>`), increments `total_bosses_defeated`, and returns a `boss` block in the response. Follow-up migration re-scoped `reward_ledger`'s double-payout guard to `(session_id, reason)` since a kill session legitimately writes two rows.
+- [x] **`progress_percent` redefined:** boss HP dealt / max HP at the current location (absolute, reset on advance; 0 where there's no boss). Backfill reset all rows to 0.
+- [x] Chainbreaker is consumed by `advance_map_location` RPC (+ `map-advance` edge function, idempotent): advancing requires the immediate-next location, current boss down, level ≥ `unlock_level`, and 1 chainbreaker — first real item effect, proves the Phase 3 inventory plumbing. Errors: `not_next_location`/`boss_not_defeated`/`level_too_low`/`chainbreaker_required`, all verified live.
 
-### 4.2 Client
-- [ ] `player-state` (or new `map-state` function) returns map progress; `useMapStore` hydrates from server instead of local data.
-- [ ] `MapScreen`/`FogOverlay`/`LocationMarkers`: drive status from server state; fog reveals on discovery; boss HP bar at current location.
-- [ ] `SessionSummaryPopup`: show boss damage dealt this session ("You struck Zalthar for 47 damage") — this is the line that makes sessions feel like *progress*, prioritize it.
-- [ ] Narrative onboarding screen (3 panels max): the premise, the stake, the first target session.
+### 4.2 Client — ✅ (onboarding deferred)
+- [x] `player-state` (v7) calls `ensure_map_start` and returns `map_progress`; `useMapStore` rewritten as a server mirror (catalog via RLS read + progress rows, `deriveLocationState()` helper) — the old local-simulation store is gone.
+- [x] `MapScreen` card list driven by server state: boss HP bars, defeated checkmarks, "Break the chains" advance flow (confirm → consume chainbreaker → server), lock/level/boss gating messages. The HomeScreen location title is live too. *(The never-wired `MapPanZoom`/`FogOverlay`/`LocationMarkers` prototype was dead code importing the old store — deleted; resurrect from git history when building the real pan-zoom map.)*
+- [x] `SessionSummaryPopup`: "You struck Chain Warden for 47 damage" + HP remaining; defeat shows "{boss} has fallen!" with the bonus payout.
+- [ ] **Deferred:** narrative onboarding screen (3 panels: premise, stake, first target session) — needs design input; do alongside the pan-zoom map.
 
-**Done when:** a focus session visibly damages a boss, defeating one pays ledgered rewards and reveals map, and `progress_percent` has a single documented meaning.
+**Done when:** a focus session visibly damages a boss ✅ (verified live: 47-min session → 47 damage, progress 9%), defeating one pays ledgered rewards ✅ (Chain Warden kill verified in both ledgers, clamped damage, no re-kill/double-pay), and `progress_percent` has a single documented meaning ✅.
+
+> Smoke test note: the throwaway test account (176edfee…) was advanced to Zalthar's Chains (consumed its chainbreaker) and has killed Chain Warden; it sits at level 4, progress 100%.
 
 ---
 
-## Phase 5 — Retention & ambient presence
+## Phase 5 — Retention & ambient presence — ✅ SHIPPED (server-dependent track; widgets deferred to Track B)
 
 Independent items; ship incrementally in any order after Phase 2.
 
-- [ ] 🟠 **Streak freezes:** `streak_freezes` count on profile; earned (e.g. every 7-day streak grants one), auto-consumed in `sessions-stop` streak logic when a day is missed (extend Phase 1.3 tests). Earnable first; purchasable is Phase 6.
-- [ ] 🟠 **Notifications** (`expo-notifications`): streak-at-risk reminder (local, scheduled from `last_focus_date`), session-broken warning (already needed by Phase 2A).
-- [ ] 🟢 **Weekly recap:** "You reclaimed 6h 40m, dealt 400 damage, 12-day streak" — derived from `reward_ledger`/`focus_sessions`; surface in-app first, push later.
-- [ ] 🟢 **Widgets / Live Activity** (needs Track B dev build): home-screen streak + today's minutes; Dynamic Island session timer.
-- [ ] 🟢 **Profile stats page polish:** `profile.tsx` fed from ledgers (real history graph, not just totals).
+- [x] 🟠 **Streak freezes:** `streak_freezes` column on `player_profiles` (cap 2). The freeze math lives in `advanceStreak` (`shared/economy.ts`): one banked every 7th consecutive day; missed days covered **retroactively** when the player returns, and a freeze is only *spent* when it actually saves the streak (a gap wider than the bank still resets). `sessions-stop` computes the new balance and the RPC persists it (new `p_streak_freezes` arg). 12 new freeze unit tests (33 total). Earnable now; purchasable is Phase 6. Verified live: a 6-day streak with a 2-day gap + 1 freeze resets; with the gap frozen it extends to 7 and re-banks.
+- [x] 🟠 **Notifications** (`expo-notifications`, `src/lib/notifications.ts`): local-only. Permission requested contextually on first session start. **Session-broken warning** scheduled on background (fires after the 30s grace, cancelled on timely return) since suspended JS can't pop its own UI. **Streak-at-risk reminder** at 20:00 local, rescheduled from the server's `last_focus_date` on every sync and after each qualifying session. Plugin added to `app.json`.
+- [x] 🟢 **Weekly recap:** `player-state` returns a rolling 7-day `recap` (dust/shards/xp from `reward_ledger`, verified focus-ms + boss damage + session count from stop-event metadata) — derived server-side, never from client state. Surfaced as a "This week — You reclaimed Xh Ym" card on the profile page. The session summary also now calls out freezes banked/spent.
+- [ ] 🟢 **Widgets / Live Activity** (needs Track B dev build): home-screen streak + today's minutes; Dynamic Island session timer. **Deferred** — blocked on the dev build (Expo Go can't host widgets).
+- [x] 🟢 **Profile stats page polish:** streak-freeze balance row + the weekly recap card added. A full ledger-fed history graph is still a 🟢 nice-to-have, deferred.
+
+> Smoke test note: the throwaway account (176edfee…) was used to verify freeze persistence; it currently sits at level 4 with a 7-day streak and 1 banked freeze from the fixture. Recap focus-ms/damage populate only from real edge-function stops (direct-RPC test fixtures don't write stop events).
 
 ---
 
-## Phase 6 — Monetization
+## Phase 6 — Monetization — 🟡 SERVER BACKBONE SHIPPED (client IAP gated on the Track B dev build)
 
-Last on purpose: requires dev build (Phase 2B), a real shop (Phase 3), and content worth paying for (Phase 4).
+> **Track B is *not* a prerequisite for the monetization *server*.** The split: the ledgered grant path, entitlements, and webhook are pure-server and testable on Track A (done below). Only the *client* IAP SDK + paywall need a custom dev build (native modules absent from Expo Go) — that's the same dev-build prerequisite Track B shares, **not** the app-blocking work itself.
 
-- [ ] **RevenueCat** (or `expo-iap` + server receipt validation — RevenueCat recommended: handles receipts, entitlements, GBP/regional pricing). Server webhook → edge function credits shards via `purchase_item`-style RPC; **never** credit IAP client-side.
-- [ ] **Shard packs:** cap at £19.99 initially (drop the £49.99/£99.99 tiers from the seed until there's demand evidence).
-- [ ] **Crystal Pass subscription** (£5.99/mo): `entitlements` table fed by RevenueCat webhook. Gate breadth, not power: exclusive regions/themes/quests, advanced stats, unlimited block-lists (2B). **Revisit the "50% progression boost" copy — gate content, not effectiveness.**
-- [ ] **Streak repair SKU:** one-tap restore of a just-lost streak (highest-converting item in the category; pair with the streak-at-risk notification).
-- [ ] **Paywall + App Store hygiene:** restore purchases, manage subscription link, GDPR-clean analytics on conversion points.
+### Server backbone — ✅ (Track A, verified live)
+- [x] **`entitlements` table** (own-row RLS) for subscription/pass state; **`iap_receipts`** dedup table (service-role only, all client grants revoked); **`store_product_id`** column on `shop_items` mapping StoreKit/RevenueCat ids → catalog ids.
+- [x] **`redeem_iap_purchase` RPC** (service-role only): credits shards through `currency_ledger` **or** sets a pass entitlement, idempotent on `transaction_id` so webhook redelivery is a no-op, logs to `purchase_ledger`. **Never** credit IAP client-side — this is the only path. Verified live: shard grant (+20 → ledger + wallet), redelivery no-op, Crystal Pass entitlement with 30-day expiry, unknown-product safe-ack.
+- [x] **`iap-webhook` edge function** (`verify_jwt: false` — the only non-JWT function; fail-closed on missing `REVENUECAT_WEBHOOK_SECRET`, bearer-checked, acks non-granting events to stop retries). RevenueCat v1 event shape. Auth gate verified live (503 until configured, 401 bad bearer, 405 GET).
+- [x] **`player-state` returns `entitlements`**; client `usePlayerStore` mirrors them with a `hasEntitlement()` gate ready for Crystal Pass content.
 
-**Done when:** a sandbox IAP credits shards through the ledger via webhook, and entitlement state survives reinstall via restore.
+### Client IAP + go-live — ⏳ DEFERRED to the Track B dev build
+- [ ] **RevenueCat client SDK** (`react-native-purchases`) — needs a dev build; configure `app_user_id` = Supabase user id so webhook `app_user_id` resolves. Set `REVENUECAT_WEBHOOK_SECRET` (`supabase secrets set`) + paste into the RevenueCat dashboard webhook.
+- [ ] **Create store products**, then fill `shop_items.store_product_id` and flip the GBP rows `active = true` (currently inactive; shard packs already capped at £19.99 in the seed).
+- [ ] **Crystal Pass** (£5.99/mo): gate breadth not power — exclusive regions/themes/quests, advanced stats, unlimited block-lists (2B). Copy already content-gated in the seed.
+- [ ] **Streak-repair SKU:** one-tap restore of a just-lost streak (pair with the Phase 5 streak-at-risk notification). Server: a small `restore_streak` RPC; client: paywall entry.
+- [ ] **Paywall + App Store hygiene:** restore purchases, manage-subscription link, GDPR-clean conversion analytics.
+
+**Done when:** a sandbox IAP credits shards through the ledger via webhook ✅ *(grant path + idempotency verified live via the RPC; full sandbox round-trip pending the dev build + RevenueCat config)*, and entitlement state survives reinstall via restore ⏳ *(client restore, dev build)*.
 
 ---
+
+## Phase 7 — Fragment gates & the two-stage location loop — ✅ SHIPPED (server + client)
+
+Replaces the abstract single `progress_percent` bar (and the level-gated, chainbreaker advance that stranded players at 100% — see the "first two levels share one location" dead-zone) with a concrete two-beat loop per location. Migration `20260628201034_phase7_fragment_gates_boss_arc`.
+
+### Design
+- **GATE → BOSS per location.** In the **gate** stage, verified focus drips location-themed **fragments** (1 per 30 verified min, carry-over banked in `fragment_progress_ms`). Fragments are a **per-location progress counter, not a wallet currency** — unbuyable, earned only by focus, reset each location. When full, the player taps the gate's verb ("Break the Chains") to enter the **boss** stage; verified focus then drains boss HP (1/min). The killing blow auto-advances to the next location's gate.
+- **Currencies untouched:** dust still drips per minute; shards stay premium (shop/IAP + boss-kill milestones). Nothing in the core loop spends the currency we sell.
+- **Map arc rebuilt into a journey ending at Zalthar:** Hold (Break the Chains / Chainbreaker Fragment ×4 / The Warden 180hp) → Swirling Depths (Break the Seal / Sigil ×8 / 480) → The Vexed Ruins (Raise the Portcullis / Rune ×12 / 840) → Withered Plains (Shatter the Ward / Ward ×16 / 1320) → **Zalthar's Throne** (Breach the Throne / Throne Key ×24 / Zalthar 2280). The redundant "Zalthar's Chains" location is gone (the chains are now the Hold's gate). The `unlock_level` gate is removed entirely — pacing is fragments + boss HP.
+
+### Server — ✅ (verified live)
+- [x] `map_locations` gains `gate_label`/`fragment_name`/`fragments_required`; `player_map_progress` gains `stage`/`fragments_collected`/`fragment_progress_ms`. Ladder reseeded; all progress wiped to a clean gate start.
+- [x] `complete_focus_session` rewritten: drops `p_damage` (derives fragments **and** boss damage from the verified `p_elapsed_ms`), branches on stage, pays boss rewards + auto-advances on kill, returns a `map` block (replaces `boss`). `break_gate(p_user_id)` RPC for the one manual action (gate → boss). `advance_map_location` + the `map-advance` function dropped/retired; new `map-break-gate` edge function. `ensure_map_start` seeds a gate.
+- [x] Verified live end-to-end on a test account: 2h gate session → 4 fragments (capped) + `gate_ready`; `break_gate` → boss 180hp; 3h boss session → 180 damage → kill + ledgered rewards (150/5/300) → auto-advance to Swirling Depths gate; 50-min partial → 1 fragment + 20 min banked (carry-over exact). Test fixtures cleaned up.
+
+### Client — ✅
+- [x] `MapProgressHeader` replaces the `ProgressBar` arc on Home: live "xxh xxm xxs until next {fragment}" countdown + fragment pips in the gate stage, live boss healthbar in the boss stage (both tick off the running session's elapsed). `MapScreen` rewritten for gate/boss state + the "Break the gate" button. `SessionSummaryPopup` shows fragments collected / gate ready / boss struck / defeated + path opens. `api.ts`, `useMapStore` (fragment/stage fields, `applyMapResult`/`applyBreakGate`), `useFocusTimerStore`, `profile.tsx` updated. `tsc`/lint/deno (30 tests) green.
+
+### Follow-ups
+- [ ] **Retire the Chainbreaker inventory/shop UI** (`InventoryBottomSheet` key-item card + `ShopBottomSheet` asset) — the item is fully removed from the loop; the card now always renders greyed. Left in place to keep this change focused; remove deliberately.
+- [ ] **Victory state** for clearing Zalthar's Throne (no next location): currently `MapProgressHeader` shows "The realm lies quiet" and there's no current location. Design a proper end-of-arc screen.
+- [ ] Rename/retune any of the placeholder gate labels, fragment names, counts, or boss HP — all data-only on `map_locations`.
+
+---
+
+## Phase 8 — The Relic redesign (approach 2: Sigil) — ✅ SHIPPED 2026-07-04
+
+Design pivot agreed 2026-07-03 (Hassan + Marcus): visual direction **1B "Sigil"** (gold
+relic-crest cards, procedural SVG — no illustrator), extended with the **Relic system**
+(mock 2A). No leaderboard for MVP; the backend stays server-authoritative (anti-cheat).
+
+### Mechanics
+- **Relics.** Defeating a location's boss leaves behind that location's relic at
+  **Bronze Seal**, auto-equipped if a loadout slot is free. One relic per location,
+  defined on `map_locations` (`relic_name`, `perk_name`, `relic_flavor`).
+- **Seals (mini-progression).** Bronze → Silver → Gold → Mythic. Each *qualifying*
+  session (≥25 verified min — the streak bar) credits +1 attuned session to every
+  **equipped** relic. Rank-up thresholds: Silver 3, Gold 6, Mythic 12 sessions.
+- **Perks.** A relic's perk is a passive **map-progression multiplier while equipped**
+  (fragments + boss damage, never currency): Bronze +0.05×, Silver +0.08×,
+  Gold +0.12×, Mythic +0.20×. Purchased boosters stay currency-only — money buys
+  currency, mastery buys progression.
+- **Loadout.** 2 slots, any owned relics; bonuses sum (2 Mythics = 1.40×).
+  `set_relic_loadout` RPC + `relics-loadout` edge function.
+- **Seal-gated shop.** `shop_items` gains `required_location_id` + `required_seal`;
+  `purchase_item` refuses below-rank buys (`seal_rank_required`). Level-exclusive items
+  seeded per location; old `chainbreaker` item retired (`active = false`).
+
+### Server
+- `player_relics` (user, location, rank, rank_sessions, equipped_slot 1|2, RLS own-row
+  select, zero client writes). `complete_focus_session` applies the equipped perk
+  multiplier to the map-progress ms, grants the relic on a boss kill, credits attuned
+  sessions on qualifying stops, and returns a `relics` block (+ `relic_earned` in `map`).
+  `player-state` returns `relics`. Seal constants live in `shared/economy.ts` with tests.
+
+### Client (visual refactor — gold Sigil direction)
+- `src/theme.ts` gold palette + Silkscreen pixel font (numerals/labels) + Instrument Serif.
+- **Home**: procedural relic-crest card centerpiece (hex crest + rays + progress seal),
+  pixel top bar (dust · TYREN · shards), rank track (BRZ/SLV/GLD/MYT), equipped-perk chip,
+  gold Focus button; **boss stage** flips to the ember-red variant (HP in pixel numerals,
+  segmented header). Video background dropped.
+- **Screens**: Game Map (gold card list), Relic detail, Relic Codex, Loadout,
+  Rank-up moment. Shop/Inventory sheets restyled (level-item section w/ seal locks,
+  equipped-perks row). Session summary reports relic earned / attunement / rank-ups.
+
+### Status (2026-07-04) — all shipped & verified
+- Migrations `phase8_relic_system` + `phase8_pin_seal_helper_search_path` applied
+  remotely; `sessions-stop` v15, `player-state` v11, `relics-loadout` v1 deployed.
+- Live-verified on the test account (176edfee…): Warden kill → Bronze relic
+  auto-equip + auto-advance; 1.05× perk on gate accrual (30 min → 1 fragment + 90s
+  banked); 3rd qualifying session → Silver rank-up; loadout RPC; `chain_draught`
+  purchasable at Silver while `sundering_sigil` (Gold) and `abyssal_tonic`
+  (unowned relic) correctly raise `seal_rank_required`.
+- 38 deno tests green (seal math added); `tsc` + lint clean; advisors at baseline.
+- Client: Home rebuilt around the procedural crest card (gate/boss states, ember
+  boss variant, rank-up moment queue); Map/Codex/Loadout/Relic-detail/Profile/Auth
+  all in the gold system; Silkscreen pixel font bundled (OFL); video background,
+  `MapProgressHeader`, `ProgressBar`, `GridCell`, chainbreaker UI all removed.
+
+### Follow-ups
+- [ ] Settings screen from the design set (blocked apps, session length,
+  auto-start, notifications toggles) — most rows need Track B / notification prefs.
+- [ ] In-app smoke test on a device (start/stop, relic moment, loadout swap).
+- [ ] Target-session UI (server supports `mode: 'target'`; Home only starts freeform).
+- [ ] Retune seal thresholds (3/6/12) and level-item prices after playtesting —
+  data-only (`relic_seal_sessions_required` + `shop_items`).
+- [ ] Victory state for clearing Zalthar's Throne (carried from Phase 7).
 
 ## Cross-cutting rules (apply from Phase 0 onward)
 

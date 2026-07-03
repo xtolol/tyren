@@ -1,4 +1,5 @@
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { useFonts } from "expo-font";
 import { useRouter, useSegments, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
@@ -6,6 +7,7 @@ import { Linking } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useAuthStore } from "@/src/stores/useAuthStore";
 import { supabase } from "@/src/lib/supabase";
+import { palette } from "@/src/theme";
 
 async function handleDeepLink(url: string) {
   // Supabase appends tokens as query params or, in the implicit flow,
@@ -60,15 +62,23 @@ function AuthGuard() {
 }
 
 export default function RootLayout() {
+  // The whole design system's type: serif titles, pixel numerals, UI sans.
+  const [fontsLoaded] = useFonts({
+    "InstrumentSerif-Regular": require("@/assets/images/fonts/InstrumentSerif-Regular.ttf"),
+    "Silkscreen": require("@/assets/images/fonts/Silkscreen-Regular.ttf"),
+    "Silkscreen-Bold": require("@/assets/images/fonts/Silkscreen-Bold.ttf"),
+  });
+  if (!fontsLoaded) return null;
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: palette.bg }}>
       <BottomSheetModalProvider>
         <StatusBar style="light" translucent backgroundColor="transparent" />
         <AuthGuard />
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: 'transparent' },
+            contentStyle: { backgroundColor: palette.bg },
           }}
         />
       </BottomSheetModalProvider>

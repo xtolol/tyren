@@ -78,17 +78,74 @@ export function calculateRewards(args: {
   return { dust, shards, xp, completed }
 }
 
-export function calculateProgress(
-  elapsedMs: number,
-  mode: string,
-  targetMs: number | null
-): number {
-  const cappedMs = Math.min(elapsedMs, MAX_REWARDABLE_MS)
-  if (mode === 'target' && targetMs != null) {
-    return Math.min(100, Math.round((cappedMs / targetMs) * 100))
+// Map progress (fragment accrual in the gate stage, boss damage in the boss
+// stage) is owned entirely by complete_focus_session in SQL — it derives both
+// from the verified rewardable ms this module computes, branching on the
+// player's current stage and carrying the per-location fragment remainder.
+// Both are deliberately boost-immune: boosters buy currency, not progress
+// through the world.
+
+// ---- Relic seals (Phase 8) ----
+// Every defeated location leaves a relic at Bronze Seal. Qualifying sessions
+// (the streak bar) attune each *equipped* relic; seals rank up on thresholds
+// and the perk bonus rises with the seal. The perk multiplies MAP progression
+// (fragments / boss damage) only — never currency. The SQL twins of these
+// constants live in relic_seal_bonus / relic_seal_sessions_required; keep
+// them in sync.
+
+export type SealRank = 'bronze' | 'silver' | 'gold' | 'mythic'
+
+export const SEAL_RANKS: SealRank[] = ['bronze', 'silver', 'gold', 'mythic']
+
+export const SEAL_PERK_BONUS: Record<SealRank, number> = {
+  bronze: 0.05,
+  silver: 0.08,
+  gold: 0.12,
+  mythic: 0.2,
+}
+
+// Qualifying sessions needed *inside* each seal to reach the next one.
+export const SEAL_SESSIONS_REQUIRED: Record<Exclude<SealRank, 'mythic'>, number> = {
+  bronze: 3,
+  silver: 6,
+  gold: 12,
+}
+
+export const RELIC_LOADOUT_SLOTS = 2
+
+// 1 + the summed bonuses of the equipped seals (two Mythics = 1.40×).
+// Rounded so float drift can't diverge from SQL's exact numeric sum.
+export function perkMultiplier(equippedSeals: SealRank[]): number {
+  const sum = equippedSeals
+    .slice(0, RELIC_LOADOUT_SLOTS)
+    .reduce((mult, seal) => mult + SEAL_PERK_BONUS[seal], 1)
+  return Math.round(sum * 100) / 100
+}
+
+export interface AttuneResult {
+  seal: SealRank
+  sealSessions: number
+  rankedUp: boolean
+}
+
+// Credit qualifying sessions to a relic, cascading rank-ups. Progress resets
+// each seal (thresholds are per-seal, not cumulative); Mythic just banks.
+export function attuneRelic(seal: SealRank, sealSessions: number, credited = 1): AttuneResult {
+  let current = seal
+  let sessions = sealSessions + credited
+  let rankedUp = false
+  while (current !== 'mythic' && sessions >= SEAL_SESSIONS_REQUIRED[current]) {
+    sessions -= SEAL_SESSIONS_REQUIRED[current]
+    current = SEAL_RANKS[SEAL_RANKS.indexOf(current) + 1]
+    rankedUp = true
   }
-  // Freeform: 1% per minute, max 100%
-  return Math.min(100, Math.round(cappedMs / 60_000))
+  return { seal: current, sealSessions: sessions, rankedUp }
+}
+
+// How many more qualifying sessions until the next seal; null at Mythic.
+export function sessionsToNextSeal(seal: SealRank, sealSessions: number): number | null {
+  if (seal === 'mythic') return null
+  return Math.max(0, SEAL_SESSIONS_REQUIRED[seal] - sealSessions)
 }
 
 // Streak day boundaries follow the user's local clock. The client reports
@@ -103,34 +160,61 @@ export function localDateString(now: Date, tzOffsetMinutes = 0): string {
   return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10)
 }
 
+// Streak freezes (banked, capped): every 7th consecutive day banks one,
+// and missed days are retroactively covered when the player returns — a
+// freeze is only spent when it actually saves the streak.
+export const MAX_STREAK_FREEZES = 2
+export const STREAK_FREEZE_EARN_DAYS = 7
+
 export interface StreakResult {
   streak: number
   qualifies: boolean
   // Local focus day to persist, or null when the session doesn't qualify.
   focusDate: string | null
+  freezesConsumed: number
+  freezesEarned: number
 }
 
 // A streak is alive if the last qualifying focus day was today or
-// yesterday (user-local). A qualifying session today either starts a
-// streak, extends yesterday's, or keeps today's. Qualification is judged
-// on verified (rewardable) time so an unattended timer can't farm streaks.
+// yesterday (user-local), or if banked freezes cover every fully-missed
+// day in between. A qualifying session today either starts a streak,
+// extends yesterday's (or a frozen gap's), or keeps today's.
+// Qualification is judged on verified (rewardable) time so an unattended
+// timer can't farm streaks.
 export function advanceStreak(args: {
   rewardableMs: number
   prevStreak: number
   lastFocusDate: string | null
   now: Date
   tzOffsetMinutes?: number
+  streakFreezes?: number
 }): StreakResult {
-  const { rewardableMs, prevStreak, lastFocusDate, now, tzOffsetMinutes = 0 } = args
+  const { rewardableMs, prevStreak, lastFocusDate, now, tzOffsetMinutes = 0, streakFreezes = 0 } = args
 
   const today = localDateString(now, tzOffsetMinutes)
-  const yesterday = localDateString(new Date(now.getTime() - 86_400_000), tzOffsetMinutes)
-  const aliveStreak = lastFocusDate === today || lastFocusDate === yesterday ? prevStreak : 0
+  // Whole local days since the last qualifying focus day. Date strings
+  // parse as UTC midnights, so the difference is an exact day count.
+  const daysSince = lastFocusDate
+    ? Math.round((Date.parse(today) - Date.parse(lastFocusDate)) / 86_400_000)
+    : Infinity
+  const missedDays = Math.max(0, daysSince - 1)
+  const frozen = prevStreak > 0 && missedDays > 0 && missedDays <= streakFreezes
+  const aliveStreak = daysSince <= 1 || frozen ? prevStreak : 0
 
   const qualifies = rewardableMs >= STREAK_MIN_MINUTES * 60_000
-  const streak = qualifies
-    ? lastFocusDate === today ? Math.max(aliveStreak, 1) : aliveStreak + 1
-    : aliveStreak
+  if (!qualifies) {
+    return { streak: aliveStreak, qualifies, focusDate: null, freezesConsumed: 0, freezesEarned: 0 }
+  }
 
-  return { streak, qualifies, focusDate: qualifies ? today : null }
+  const newDay = daysSince !== 0
+  const streak = newDay ? aliveStreak + 1 : Math.max(aliveStreak, 1)
+  const freezesConsumed = newDay && frozen ? missedDays : 0
+  const freezesEarned =
+    newDay &&
+    streak % STREAK_FREEZE_EARN_DAYS === 0 &&
+    streakFreezes - freezesConsumed < MAX_STREAK_FREEZES
+      ? 1
+      : 0
+
+  return { streak, qualifies, focusDate: today, freezesConsumed, freezesEarned }
 }

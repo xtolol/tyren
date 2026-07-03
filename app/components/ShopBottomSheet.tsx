@@ -1,12 +1,14 @@
-import BoostIcon from "@/assets/images/booster-48px.svg";
-import Chainbreaker from "@/assets/images/chainbreaker-48px.png";
 import DustIcon from "@/assets/images/dust-16px.svg";
 import ShardIcon from "@/assets/images/shard-16px.svg";
-import CloseIcon from "@/assets/images/x-24px.svg";
+import { SEAL_LABELS, sealAtLeast } from "@/src/core/relics";
 import type { ShopItem } from "@/src/lib/api";
 import { api } from "@/src/lib/api";
+import { useMapStore } from "@/src/stores/useMapStore";
 import { usePlayerStore } from "@/src/stores/usePlayerStore";
-import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
+import { useRelicStore } from "@/src/stores/useRelicStore";
+import { fonts, palette, sealColors } from "@/src/theme";
+import { Ionicons } from "@expo/vector-icons";
+import Crest from "./sigil/Crest";
 
 import BottomSheetModal, {
   BottomSheetBackdrop,
@@ -24,7 +26,6 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -41,7 +42,6 @@ export interface ShopBottomSheetRef {
   present: () => void;
 }
 
-// Helper function to format currency values
 function formatCurrencyValue(value: number): string {
   if (value >= 1000) {
     return `${(value / 1000).toFixed(1).replace(/\.0$/, "")}K`;
@@ -57,97 +57,85 @@ function currencyLabel(currency: ShopItem["currency"]): string {
   return currency === "dust" ? "Time Dust" : "Time Shards";
 }
 
-// Level Item Card
-function LevelItemCard({ item, owned }: { item: ShopItem; owned: boolean }) {
-  const gradientId = `levelGrad-${item.id}`;
-
+function PriceTag({ item }: { item: ShopItem }) {
+  const Icon = item.currency === "dust" ? DustIcon : ShardIcon;
+  const color = item.currency === "dust" ? palette.dust : palette.shards;
   return (
-    <View style={[styles.levelItemCard, owned && styles.ownedCard]}>
-      <Svg
-        style={styles.gradientOverlay}
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        pointerEvents="none"
-      >
-        <Defs>
-          <RadialGradient
-            id={gradientId}
-            cx="70"
-            cy="100"
-            r="70"
-            gradientUnits="userSpaceOnUse"
-          >
-            <Stop offset="0%" stopColor="#4C0093" />
-            <Stop offset="100%" stopColor="#17002D" />
-          </RadialGradient>
-        </Defs>
-        <Rect
-          x="-1"
-          y="-1"
-          width="102"
-          height="102"
-          fill={`url(#${gradientId})`}
-        />
-      </Svg>
-      <View style={styles.levelItemContent}>
-        <View style={styles.passIconContainer}>
-          <Image source={Chainbreaker} style={{ width: 48, height: 48 }} />
-        </View>
-        <View style={styles.passTextContainer}>
-          <Text style={styles.passLabel}>{item.name}</Text>
-          <Text style={styles.passDescription}>{item.description}</Text>
-        </View>
-        {owned ? (
-          <Text style={styles.ownedText}>OWNED</Text>
-        ) : (
-          <View style={styles.levelItemPrice}>
-            <ShardIcon width={16} height={16} />
-            <Text style={[styles.priceText, { color: "#C34DB0" }]}>
-              {item.price}
-            </Text>
-          </View>
-        )}
-      </View>
+    <View style={styles.priceRow}>
+      <Icon width={12} height={12} />
+      <Text style={[styles.priceText, { color }]}>
+        {formatCurrencyValue(item.price)}
+      </Text>
     </View>
   );
 }
 
-// Booster Card
+// A level-exclusive item row: the seal rank on the location's relic
+// decides whether it's buyable or still sealed away.
+function LevelItemRow({
+  item,
+  glyphIndex,
+  meetsSeal,
+}: {
+  item: ShopItem;
+  glyphIndex: number;
+  meetsSeal: boolean;
+}) {
+  const sealColor = item.required_seal ? sealColors[item.required_seal] : palette.gold;
+
+  return (
+    <View style={[styles.levelItemCard, !meetsSeal && styles.dimmed]}>
+      <View style={styles.levelItemIcon}>
+        <Crest
+          size={40}
+          progress={null}
+          color={meetsSeal ? palette.gold : palette.textFaint}
+          dimColor="transparent"
+          glyphIndex={glyphIndex}
+        />
+      </View>
+      <View style={styles.levelItemText}>
+        <Text style={styles.itemName}>{item.name}</Text>
+        <Text style={styles.itemDescription}>{item.description}</Text>
+      </View>
+      {meetsSeal ? (
+        <PriceTag item={item} />
+      ) : (
+        <View style={styles.lockColumn}>
+          <Ionicons name="lock-closed-outline" size={14} color={palette.textFaint} />
+          <Text style={[styles.lockText, { color: sealColor }]}>
+            {item.required_seal ? SEAL_LABELS[item.required_seal].toUpperCase() : ""}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function BoosterCard({ item, affordable }: { item: ShopItem; affordable: boolean }) {
   return (
-    <View style={[styles.gridCard, !affordable && styles.unaffordableCard]}>
-      <BoostIcon width={32} height={32} />
+    <View style={[styles.gridCard, !affordable && styles.dimmed]}>
+      <Ionicons name="hourglass-outline" size={26} color={palette.gold} />
       <Text style={styles.gridItemDuration}>
         {formatBoostDuration(item.effect.duration_ms)}
       </Text>
       <Text style={styles.gridItemName}>{item.name}</Text>
-      <View style={styles.gridItemPrice}>
-        <DustIcon width={12} height={12} />
-        <Text style={[styles.gridItemPriceText, { color: "#FBC647" }]}>
-          {formatCurrencyValue(item.price)}
-        </Text>
-      </View>
+      <PriceTag item={item} />
     </View>
   );
 }
 
-// Time Dust Card
 function TimeDustCard({ item, affordable }: { item: ShopItem; affordable: boolean }) {
   return (
-    <View style={[styles.gridCard, !affordable && styles.unaffordableCard]}>
+    <View style={[styles.gridCard, !affordable && styles.dimmed]}>
       <View style={styles.timeDustIconContainer}>
-        <DustIcon width={32} height={32} />
+        <DustIcon width={28} height={28} />
         <Text style={styles.timeDustAmount}>
           {formatCurrencyValue(item.effect.amount ?? 0)}
         </Text>
       </View>
       <Text style={styles.gridItemNameSmall}>{item.name}</Text>
-      <View style={styles.gridItemPrice}>
-        <ShardIcon width={12} height={12} />
-        <Text style={[styles.gridItemPriceText, { color: "#C34DB0" }]}>
-          {item.price}
-        </Text>
-      </View>
+      <PriceTag item={item} />
     </View>
   );
 }
@@ -172,7 +160,8 @@ const ShopBottomSheet = React.forwardRef<
 
   const dust = usePlayerStore((s) => s.dust);
   const shards = usePlayerStore((s) => s.shards);
-  const inventory = usePlayerStore((s) => s.inventory);
+  const locations = useMapStore((s) => s.locations);
+  const relics = useRelicStore((s) => s.relics);
 
   useEffect(() => {
     if (!isOpen || catalog !== null) return;
@@ -203,9 +192,28 @@ const ShopBottomSheet = React.forwardRef<
     [dust, shards],
   );
 
+  // Does the player's relic for this item's location meet the seal bar?
+  const meetsSeal = useCallback(
+    (item: ShopItem) => {
+      if (!item.required_location_id) return true;
+      const relic = relics[item.required_location_id];
+      if (!relic) return false;
+      return sealAtLeast(relic.seal, item.required_seal ?? "bronze");
+    },
+    [relics],
+  );
+
   const handlePurchase = useCallback(
     (item: ShopItem) => {
       if (item.currency === "gbp" || purchasingId) return;
+      if (!meetsSeal(item)) {
+        const location = locations.find((l) => l.id === item.required_location_id);
+        Alert.alert(
+          "Sealed away",
+          `${item.name} unlocks once ${location?.relic_name ?? "the level's relic"} reaches the ${SEAL_LABELS[item.required_seal ?? "bronze"]}.`,
+        );
+        return;
+      }
       if (!canAfford(item)) {
         Alert.alert(
           "Not enough " + currencyLabel(item.currency),
@@ -235,7 +243,7 @@ const ShopBottomSheet = React.forwardRef<
         ],
       );
     },
-    [canAfford, purchasingId],
+    [canAfford, meetsSeal, locations, purchasingId],
   );
 
   useImperativeHandle(ref, () => ({
@@ -281,13 +289,30 @@ const ShopBottomSheet = React.forwardRef<
         {...props}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
-        opacity={0.5}
+        opacity={0.6}
       />
     ),
     [],
   );
 
-  const levelItems = byCategory.level_item ?? [];
+  // Level items grouped by their location, in path order.
+  const levelItemGroups = useMemo(() => {
+    const items = (byCategory.level_item ?? []).filter(
+      (item) => item.required_location_id,
+    );
+    const groups = new Map<string, ShopItem[]>();
+    for (const item of items) {
+      const key = item.required_location_id!;
+      groups.set(key, [...(groups.get(key) ?? []), item]);
+    }
+    return [...groups.entries()]
+      .map(([locationId, groupItems]) => ({
+        location: locations.find((l) => l.id === locationId),
+        items: groupItems,
+      }))
+      .sort((a, b) => (a.location?.sort_order ?? 99) - (b.location?.sort_order ?? 99));
+  }, [byCategory.level_item, locations]);
+
   const boosters = byCategory.booster ?? [];
   const dustPacks = byCategory.dust_pack ?? [];
 
@@ -301,15 +326,15 @@ const ShopBottomSheet = React.forwardRef<
       enablePanDownToClose={true}
       backdropComponent={renderBackdrop}
       onChange={handleSheetChanges}
-      backgroundStyle={{ backgroundColor: "#061013" }}
-      handleIndicatorStyle={{ backgroundColor: "#CCCCCC", width: 40 }}
+      backgroundStyle={{ backgroundColor: palette.bgRaised }}
+      handleIndicatorStyle={{ backgroundColor: palette.goldDim, width: 40 }}
     >
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.placeholderLeft} />
         <Text style={styles.title}>Item Shop</Text>
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-          <CloseIcon width={24} height={24} />
+          <Ionicons name="close" size={20} color={palette.text} />
         </TouchableOpacity>
       </View>
 
@@ -322,39 +347,40 @@ const ShopBottomSheet = React.forwardRef<
           catalogError ? (
             <Text style={styles.catalogError}>{catalogError}</Text>
           ) : (
-            <ActivityIndicator color="#39A5C9" style={{ marginTop: 48 }} />
+            <ActivityIndicator color={palette.gold} style={{ marginTop: 48 }} />
           )
         ) : (
           <>
-            {/* Level Item */}
-            {levelItems.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Level item</Text>
+            {/* Level-exclusive items, gated by each relic's seal rank */}
+            {levelItemGroups.map(({ location, items }) => (
+              <View style={styles.section} key={location?.id ?? "unknown"}>
+                <Text style={styles.sectionTitle}>Level items</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Get a level exclusive item for Zalthar&apos;s Chains
+                  Exclusive to {location?.name ?? "the realm"} — what you can
+                  buy is gated by {location?.relic_name ?? "its relic"}&apos;s seal
                 </Text>
-                {levelItems.map((item) => {
-                  const owned = (inventory[item.id] ?? 0) > 0;
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      activeOpacity={0.8}
-                      disabled={owned}
-                      onPress={() => handlePurchase(item)}
-                    >
-                      <LevelItemCard item={item} owned={owned} />
-                    </TouchableOpacity>
-                  );
-                })}
+                {items.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    activeOpacity={0.8}
+                    onPress={() => handlePurchase(item)}
+                  >
+                    <LevelItemRow
+                      item={item}
+                      glyphIndex={location?.sort_order ?? 0}
+                      meetsSeal={meetsSeal(item)}
+                    />
+                  </TouchableOpacity>
+                ))}
               </View>
-            )}
+            ))}
 
             {/* Boosters */}
             {boosters.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Boosters</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Multiply dust and XP from focus sessions
+                  Temporary boosts to dust and XP
                 </Text>
                 <View style={styles.threeColumnGrid}>
                   {boosters.map((item) => (
@@ -422,9 +448,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: "regular",
-    color: "#FFFFFF",
-    fontFamily: "InstrumentSerif-Regular",
+    color: palette.text,
+    fontFamily: fonts.serif,
   },
   closeButton: {
     padding: 8,
@@ -432,7 +457,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 32,
     height: 32,
-    backgroundColor: "#00222D",
+    backgroundColor: palette.card,
     borderRadius: 100,
   },
   placeholderLeft: {
@@ -441,8 +466,8 @@ const styles = StyleSheet.create({
   },
   catalogError: {
     fontSize: 14,
-    fontFamily: "OpenSans",
-    color: "#FF6B6B",
+    fontFamily: fonts.ui,
+    color: palette.danger,
     textAlign: "center",
     marginTop: 48,
   },
@@ -450,77 +475,66 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    fontSize: 20,
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
+    fontSize: 22,
+    color: palette.text,
+    fontFamily: fonts.serif,
   },
   sectionSubtitle: {
-    fontSize: 14,
-    fontWeight: "regular",
-    color: "#888888",
-    fontFamily: "OpenSans",
-  },
-  gradientOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    fontSize: 13,
+    color: palette.textDim,
+    fontFamily: fonts.ui,
   },
   levelItemCard: {
-    borderRadius: 12,
-    marginTop: 8,
-    overflow: "hidden",
-  },
-  levelItemContent: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
     gap: 12,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    backgroundColor: palette.card,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 8,
   },
-  ownedCard: {
-    opacity: 0.7,
+  dimmed: {
+    opacity: 0.55,
   },
-  unaffordableCard: {
-    opacity: 0.45,
-  },
-  passIconContainer: {
-    justifyContent: "center",
+  levelItemIcon: {
+    width: 44,
     alignItems: "center",
   },
-  passTextContainer: {
+  levelItemText: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
-  passLabel: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
+  itemName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: palette.text,
+    fontFamily: fonts.ui,
     letterSpacing: 0.6,
   },
-  passDescription: {
+  itemDescription: {
     fontSize: 12,
-    fontWeight: "regular",
-    color: "#CCCCCC",
-    fontFamily: "OpenSans",
+    color: palette.textDim,
+    fontFamily: fonts.ui,
   },
-  ownedText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
+  lockColumn: {
+    alignItems: "center",
+    gap: 3,
   },
-  priceText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
+  lockText: {
+    fontSize: 6,
+    fontFamily: fonts.pixel,
+    letterSpacing: 1,
   },
-  levelItemPrice: {
+  priceRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+  },
+  priceText: {
+    fontSize: 11,
+    fontFamily: fonts.pixelBold,
   },
   threeColumnGrid: {
     flexDirection: "row",
@@ -534,49 +548,39 @@ const styles = StyleSheet.create({
   },
   gridCard: {
     width: "100%",
-    backgroundColor: "#1A1A1A",
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.hairline,
     borderRadius: 12,
     padding: 12,
     alignItems: "center",
     gap: 4,
   },
   gridItemDuration: {
-    fontSize: 12,
-    fontWeight: "regular",
-    color: "#888888",
-    fontFamily: "OpenSans",
+    fontSize: 8,
+    color: palette.textFaint,
+    fontFamily: fonts.pixel,
   },
   gridItemName: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
+    fontSize: 11,
+    fontWeight: "700",
+    color: palette.text,
+    fontFamily: fonts.ui,
   },
   gridItemNameSmall: {
     fontSize: 10,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    fontFamily: "OpenSans",
-  },
-  gridItemPrice: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-  },
-  gridItemPriceText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    fontFamily: "OpenSans",
+    fontWeight: "700",
+    color: palette.text,
+    fontFamily: fonts.ui,
   },
   timeDustIconContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: 3,
   },
   timeDustAmount: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#FBC647",
-    fontFamily: "OpenSans",
+    fontSize: 12,
+    fontFamily: fonts.pixelBold,
+    color: palette.dust,
   },
 });
