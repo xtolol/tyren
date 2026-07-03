@@ -1,6 +1,7 @@
 import DustIcon from '@/assets/images/dust-16px.svg';
 import ShardIcon from '@/assets/images/shard-16px.svg';
 import { usePlayerStore } from '@/src/stores/usePlayerStore';
+import { useMapStore } from '@/src/stores/useMapStore';
 import { useAuthStore } from '@/src/stores/useAuthStore';
 import { Ionicons } from '@expo/vector-icons';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -50,13 +51,19 @@ export default function ProfileScreen() {
     dust,
     shards,
     level,
-    progressPercent,
     totalFocusTimeMs,
     totalItemsBought,
     totalBossesDefeated,
     currentStreak,
     longestStreak,
+    streakFreezes,
+    weeklyRecap,
   } = usePlayerStore();
+
+  const locations = useMapStore((s) => s.locations);
+  const mapProgress = useMapStore((s) => s.progress);
+  const currentLocationName =
+    locations.find((l) => mapProgress[l.id]?.status === 'current')?.name ?? "Zalthar's Hold";
 
   const username = (user?.user_metadata?.username as string | undefined) ?? user?.email ?? 'Player';
 
@@ -143,8 +150,8 @@ export default function ProfileScreen() {
               nativeControls={false}
             />
           </View>
-          <Text style={styles.characterName}>Zalthar&apos;s Chains</Text>
-          <Text style={styles.characterLevel}>LVL{level} - {progressPercent}%</Text>
+          <Text style={styles.characterName}>{currentLocationName}</Text>
+          <Text style={styles.characterLevel}>LVL {level}</Text>
           <Text style={styles.usernameText}>{username}</Text>
         </View>
 
@@ -158,6 +165,32 @@ export default function ProfileScreen() {
           <Text style={styles.signOutText}>Sign out</Text>
         </TouchableOpacity>
 
+        {/* This Week recap */}
+        {weeklyRecap && weeklyRecap.sessions > 0 && (
+          <View style={styles.recapCard}>
+            <Text style={styles.recapTitle}>This week</Text>
+            <Text style={styles.recapHeadline}>
+              You reclaimed {formatFocusTime(weeklyRecap.focus_ms)}
+            </Text>
+            <View style={styles.recapRow}>
+              <View style={styles.recapStat}>
+                <Text style={styles.recapValue}>{weeklyRecap.sessions}</Text>
+                <Text style={styles.recapStatLabel}>sessions</Text>
+              </View>
+              <View style={styles.recapStat}>
+                <Text style={styles.recapValue}>{weeklyRecap.damage}</Text>
+                <Text style={styles.recapStatLabel}>damage dealt</Text>
+              </View>
+              <View style={styles.recapStat}>
+                <Text style={[styles.recapValue, styles.dustColor]}>
+                  {formatCurrency(weeklyRecap.dust)}
+                </Text>
+                <Text style={styles.recapStatLabel}>dust</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Stats List */}
         <View style={styles.statsList}>
           <View style={styles.statRow}>
@@ -170,6 +203,12 @@ export default function ProfileScreen() {
             <Text style={styles.statLabel}>Longest streak</Text>
             <Text style={styles.statValue}>
               {longestStreak} day{longestStreak === 1 ? '' : 's'}
+            </Text>
+          </View>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Streak freezes</Text>
+            <Text style={styles.statValue}>
+              {streakFreezes} banked
             </Text>
           </View>
           <View style={styles.statRow}>
@@ -299,6 +338,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'OpenSans',
     color: 'rgba(255,255,255,0.4)',
+  },
+  recapCard: {
+    backgroundColor: '#0A1A1F',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginTop: 24,
+    padding: 20,
+  },
+  recapTitle: {
+    fontSize: 12,
+    fontFamily: 'OpenSans',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  recapHeadline: {
+    fontSize: 24,
+    fontFamily: 'InstrumentSerif-Regular',
+    color: 'white',
+    marginBottom: 16,
+  },
+  recapRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  recapStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  recapValue: {
+    fontSize: 20,
+    fontFamily: 'OpenSans',
+    fontWeight: '700',
+    color: 'white',
+  },
+  recapStatLabel: {
+    fontSize: 11,
+    fontFamily: 'OpenSans',
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 2,
   },
   statsList: {
     marginTop: 24,

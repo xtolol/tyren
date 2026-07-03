@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ActiveBoost, InventoryEntry, PurchaseResponse, ActivateBoostResponse } from '../lib/api';
+import type { ActiveBoost, Entitlement, InventoryEntry, PurchaseResponse, ActivateBoostResponse, WeeklyRecap } from '../lib/api';
 import type { CurrencyType } from '../core/rewards/types';
 
 interface PlayerStore {
@@ -16,9 +16,14 @@ interface PlayerStore {
   totalBossesDefeated: number;
   currentStreak: number;
   longestStreak: number;
+  streakFreezes: number;
   // item_id → quantity owned; server-authoritative, mirrored on sync
   inventory: Record<string, number>;
   activeBoosts: ActiveBoost[];
+  // Active (unexpired) entitlements, e.g. 'crystal_pass'. Server-granted.
+  entitlements: Entitlement[];
+  // Rolling 7-day recap from the last server sync; null until first sync.
+  weeklyRecap: WeeklyRecap | null;
 
   addCurrency: (type: CurrencyType, amount: number) => void;
   addXp: (amount: number) => void;
@@ -33,14 +38,20 @@ interface PlayerStore {
     total_focus_time_ms: number; total_items_bought: number;
     total_bosses_defeated: number;
     current_streak: number; longest_streak: number;
+    streak_freezes: number;
   }) => void;
   applySessionResult: (result: {
     dust: number; shards: number; level: number; new_xp: number;
     xp_to_next_level: number; progress_percent: number;
     total_focus_time_ms: number;
     current_streak: number; longest_streak: number;
+    streak_freezes: number;
+    total_bosses_defeated: number;
   }) => void;
   setInventoryState: (inventory: InventoryEntry[], boosts: ActiveBoost[]) => void;
+  setEntitlements: (entitlements: Entitlement[]) => void;
+  hasEntitlement: (entitlement: string) => boolean;
+  setWeeklyRecap: (recap: WeeklyRecap) => void;
   applyPurchase: (result: PurchaseResponse) => void;
   applyBoostActivation: (result: ActivateBoostResponse) => void;
   reset: () => void;
@@ -62,8 +73,11 @@ export const usePlayerStore = create<PlayerStore>()(
       totalBossesDefeated: 0,
       currentStreak: 0,
       longestStreak: 0,
+      streakFreezes: 0,
       inventory: {},
       activeBoosts: [],
+      entitlements: [],
+      weeklyRecap: null,
 
       addCurrency: (type, amount) => {
         set((state) => ({
@@ -112,6 +126,7 @@ export const usePlayerStore = create<PlayerStore>()(
           totalBossesDefeated: profile.total_bosses_defeated,
           currentStreak: profile.current_streak,
           longestStreak: profile.longest_streak,
+          streakFreezes: profile.streak_freezes,
         });
       },
 
@@ -126,6 +141,8 @@ export const usePlayerStore = create<PlayerStore>()(
           totalFocusTimeMs: result.total_focus_time_ms,
           currentStreak: result.current_streak,
           longestStreak: result.longest_streak,
+          streakFreezes: result.streak_freezes,
+          totalBossesDefeated: result.total_bosses_defeated,
         });
       },
 
@@ -134,6 +151,23 @@ export const usePlayerStore = create<PlayerStore>()(
           inventory: Object.fromEntries(inventory.map((e) => [e.item_id, e.quantity])),
           activeBoosts: boosts,
         });
+      },
+
+      setEntitlements: (entitlements) => {
+        set({ entitlements });
+      },
+
+      // Gates Crystal Pass content. Expired rows are already filtered out
+      // server-side, but re-check the expiry defensively.
+      hasEntitlement: (entitlement) => {
+        const now = Date.now();
+        return get().entitlements.some(
+          (e) => e.entitlement === entitlement && (e.expires_at == null || Date.parse(e.expires_at) > now),
+        );
+      },
+
+      setWeeklyRecap: (recap) => {
+        set({ weeklyRecap: recap });
       },
 
       applyPurchase: (result) => {
@@ -163,8 +197,8 @@ export const usePlayerStore = create<PlayerStore>()(
           dust: 0, shards: 0, level: 1, xp: 0,
           xpToNextLevel: XP_PER_LEVEL, progressPercent: 0,
           totalFocusTimeMs: 0, totalItemsBought: 0, totalBossesDefeated: 0,
-          currentStreak: 0, longestStreak: 0,
-          inventory: {}, activeBoosts: [],
+          currentStreak: 0, longestStreak: 0, streakFreezes: 0,
+          inventory: {}, activeBoosts: [], entitlements: [], weeklyRecap: null,
         });
       },
 

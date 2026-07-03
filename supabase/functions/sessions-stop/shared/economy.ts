@@ -78,18 +78,12 @@ export function calculateRewards(args: {
   return { dust, shards, xp, completed }
 }
 
-export function calculateProgress(
-  elapsedMs: number,
-  mode: string,
-  targetMs: number | null
-): number {
-  const cappedMs = Math.min(elapsedMs, MAX_REWARDABLE_MS)
-  if (mode === 'target' && targetMs != null) {
-    return Math.min(100, Math.round((cappedMs / targetMs) * 100))
-  }
-  // Freeform: 1% per minute, max 100%
-  return Math.min(100, Math.round(cappedMs / 60_000))
-}
+// Map progress (fragment accrual in the gate stage, boss damage in the boss
+// stage) is owned entirely by complete_focus_session in SQL — it derives both
+// from the verified rewardable ms this module computes, branching on the
+// player's current stage and carrying the per-location fragment remainder.
+// Both are deliberately boost-immune: boosters buy currency, not progress
+// through the world.
 
 // Streak day boundaries follow the user's local clock. The client reports
 // its offset as minutes *behind* UTC (JS `Date#getTimezoneOffset`, e.g.
@@ -103,34 +97,61 @@ export function localDateString(now: Date, tzOffsetMinutes = 0): string {
   return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10)
 }
 
+// Streak freezes (banked, capped): every 7th consecutive day banks one,
+// and missed days are retroactively covered when the player returns — a
+// freeze is only spent when it actually saves the streak.
+export const MAX_STREAK_FREEZES = 2
+export const STREAK_FREEZE_EARN_DAYS = 7
+
 export interface StreakResult {
   streak: number
   qualifies: boolean
   // Local focus day to persist, or null when the session doesn't qualify.
   focusDate: string | null
+  freezesConsumed: number
+  freezesEarned: number
 }
 
 // A streak is alive if the last qualifying focus day was today or
-// yesterday (user-local). A qualifying session today either starts a
-// streak, extends yesterday's, or keeps today's. Qualification is judged
-// on verified (rewardable) time so an unattended timer can't farm streaks.
+// yesterday (user-local), or if banked freezes cover every fully-missed
+// day in between. A qualifying session today either starts a streak,
+// extends yesterday's (or a frozen gap's), or keeps today's.
+// Qualification is judged on verified (rewardable) time so an unattended
+// timer can't farm streaks.
 export function advanceStreak(args: {
   rewardableMs: number
   prevStreak: number
   lastFocusDate: string | null
   now: Date
   tzOffsetMinutes?: number
+  streakFreezes?: number
 }): StreakResult {
-  const { rewardableMs, prevStreak, lastFocusDate, now, tzOffsetMinutes = 0 } = args
+  const { rewardableMs, prevStreak, lastFocusDate, now, tzOffsetMinutes = 0, streakFreezes = 0 } = args
 
   const today = localDateString(now, tzOffsetMinutes)
-  const yesterday = localDateString(new Date(now.getTime() - 86_400_000), tzOffsetMinutes)
-  const aliveStreak = lastFocusDate === today || lastFocusDate === yesterday ? prevStreak : 0
+  // Whole local days since the last qualifying focus day. Date strings
+  // parse as UTC midnights, so the difference is an exact day count.
+  const daysSince = lastFocusDate
+    ? Math.round((Date.parse(today) - Date.parse(lastFocusDate)) / 86_400_000)
+    : Infinity
+  const missedDays = Math.max(0, daysSince - 1)
+  const frozen = prevStreak > 0 && missedDays > 0 && missedDays <= streakFreezes
+  const aliveStreak = daysSince <= 1 || frozen ? prevStreak : 0
 
   const qualifies = rewardableMs >= STREAK_MIN_MINUTES * 60_000
-  const streak = qualifies
-    ? lastFocusDate === today ? Math.max(aliveStreak, 1) : aliveStreak + 1
-    : aliveStreak
+  if (!qualifies) {
+    return { streak: aliveStreak, qualifies, focusDate: null, freezesConsumed: 0, freezesEarned: 0 }
+  }
 
-  return { streak, qualifies, focusDate: qualifies ? today : null }
+  const newDay = daysSince !== 0
+  const streak = newDay ? aliveStreak + 1 : Math.max(aliveStreak, 1)
+  const freezesConsumed = newDay && frozen ? missedDays : 0
+  const freezesEarned =
+    newDay &&
+    streak % STREAK_FREEZE_EARN_DAYS === 0 &&
+    streakFreezes - freezesConsumed < MAX_STREAK_FREEZES
+      ? 1
+      : 0
+
+  return { streak, qualifies, focusDate: today, freezesConsumed, freezesEarned }
 }

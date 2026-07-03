@@ -28,10 +28,18 @@ export function useFocusTimer() {
   const startTarget = (durationMs: number) => start('target', durationMs);
 
   const stop = async () => {
-    // The store mirrors the server's totals into the player store itself
-    // (it also handles forfeits triggered by the AppState leave policy).
+    // The store mirrors the server's totals into the player and map
+    // stores itself (it also handles forfeits triggered by the AppState
+    // leave policy); the caller only needs the summary-popup payload.
     const result = await stopTimer();
-    return result?.rewards ?? null;
+    return result
+      ? {
+          rewards: result.rewards,
+          map: result.map,
+          freezesEarned: result.freezes_earned,
+          freezesConsumed: result.freezes_consumed,
+        }
+      : null;
   };
 
   return {

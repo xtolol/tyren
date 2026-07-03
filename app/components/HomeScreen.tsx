@@ -2,7 +2,9 @@ import InventoryIcon from "@/assets/images/inventory-32px.svg";
 import ShareIcon from "@/assets/images/share-24px.svg";
 import ShopIcon from "@/assets/images/shop-32px.svg";
 import { useFocusTimer } from "@/src/hooks/useFocusTimer";
+import type { MapResult } from "@/src/lib/api";
 import { useFocusTimerStore } from "@/src/stores/useFocusTimerStore";
+import { useMapStore } from "@/src/stores/useMapStore";
 import { usePlayerStore } from "@/src/stores/usePlayerStore";
 import { useFonts } from "expo-font";
 import { VideoView, useVideoPlayer } from "expo-video";
@@ -24,7 +26,7 @@ import ShopBottomSheet, { ShopBottomSheetRef } from "./ShopBottomSheet";
 import SessionSummaryPopup from "./SessionSummaryPopup";
 import { useRouter } from "expo-router";
 import NavBar from "./NavBar";
-import ProgressBar from "./ProgressBar";
+import MapProgressHeader from "./MapProgressHeader";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("screen");
 
@@ -53,19 +55,34 @@ export default function HomeScreen() {
   }
 
   const { isRunning, loading, error: timerError, elapsedMs, stop, startFreeform } = useFocusTimer();
-  const { progressPercent, level } = usePlayerStore();
+  const level = usePlayerStore((s) => s.level);
   const forfeitNotice = useFocusTimerStore((s) => s.forfeitNotice);
   const clearForfeitNotice = useFocusTimerStore((s) => s.clearForfeitNotice);
 
-  type SessionResult = { elapsedMs: number; dust: number; shards: number; xp: number };
+  // Where the player stands on the world map (server-mirrored)
+  const locations = useMapStore((s) => s.locations);
+  const mapProgress = useMapStore((s) => s.progress);
+  const currentLocationName =
+    locations.find((l) => mapProgress[l.id]?.status === 'current')?.name ?? "Zalthar's Hold";
+
+  type SessionResult = {
+    elapsedMs: number; dust: number; shards: number; xp: number;
+    map: MapResult | null; freezesEarned: number; freezesConsumed: number;
+  };
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
 
   const handleToggle = async () => {
     if (isRunning) {
       const snapshotMs = elapsedMs;
-      const rewards = await stop();
-      if (rewards) {
-        setSessionResult({ elapsedMs: snapshotMs, ...rewards });
+      const result = await stop();
+      if (result) {
+        setSessionResult({
+          elapsedMs: snapshotMs,
+          ...result.rewards,
+          map: result.map,
+          freezesEarned: result.freezesEarned,
+          freezesConsumed: result.freezesConsumed,
+        });
       }
     } else {
       startFreeform();
@@ -102,11 +119,11 @@ export default function HomeScreen() {
         nativeControls={false}
       />
       <NavBar />
-      <ProgressBar percentage={progressPercent} onMapPress={() => router.push('/map' as never)} />
+      <MapProgressHeader onMapPress={() => router.push('/map' as never)} />
       <View style={styles.bottomContainer}>
         <View style={styles.levelContainer}>
           <View style={styles.shareContainer}>
-            <Text style={styles.levelTitle}>Zalthar&apos;s Chains</Text>
+            <Text style={styles.levelTitle}>{currentLocationName}</Text>
             <ShareIcon width={24} height={24} />
           </View>
           <Text style={styles.levelnumber}>LVL {level}</Text>
@@ -201,6 +218,9 @@ export default function HomeScreen() {
           shards: sessionResult?.shards ?? 0,
           xp: sessionResult?.xp ?? 0,
         }}
+        map={sessionResult?.map ?? null}
+        freezesEarned={sessionResult?.freezesEarned ?? 0}
+        freezesConsumed={sessionResult?.freezesConsumed ?? 0}
         onContinue={() => setSessionResult(null)}
       />
 

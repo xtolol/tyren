@@ -1,7 +1,6 @@
 import { assertEquals } from 'jsr:@std/assert@1'
 import {
   advanceStreak,
-  calculateProgress,
   calculateRewards,
   localDateString,
   rewardableMs,
@@ -152,18 +151,6 @@ Deno.test('tolerance absorbs moderate heartbeat loss', () => {
   assertEquals(rewardableMs(60 * MIN, 45), 60 * MIN)
 })
 
-// ---- calculateProgress ----
-
-Deno.test('freeform progress is 1% per minute capped at 100', () => {
-  assertEquals(calculateProgress(30 * MIN, 'freeform', null), 30)
-  assertEquals(calculateProgress(150 * MIN, 'freeform', null), 100)
-})
-
-Deno.test('target progress is elapsed/target capped at 100', () => {
-  assertEquals(calculateProgress(15 * MIN, 'target', 60 * MIN), 25)
-  assertEquals(calculateProgress(90 * MIN, 'target', 60 * MIN), 100)
-})
-
 // ---- localDateString ----
 
 Deno.test('local date respects the client tz offset', () => {
@@ -188,7 +175,7 @@ const SHORT = 10 * MIN
 
 Deno.test('first qualifying session starts a streak', () => {
   const r = advanceStreak({ rewardableMs: QUALIFYING, prevStreak: 0, lastFocusDate: null, now: NOW })
-  assertEquals(r, { streak: 1, qualifies: true, focusDate: '2026-06-12' })
+  assertEquals(r, { streak: 1, qualifies: true, focusDate: '2026-06-12', freezesConsumed: 0, freezesEarned: 0 })
 })
 
 Deno.test('qualifying session extends yesterday’s streak', () => {
@@ -209,10 +196,10 @@ Deno.test('a gap resets the streak to 1', () => {
 
 Deno.test('short session never advances or persists a focus day', () => {
   const dead = advanceStreak({ rewardableMs: SHORT, prevStreak: 5, lastFocusDate: '2026-03-01', now: NOW })
-  assertEquals(dead, { streak: 0, qualifies: false, focusDate: null })
+  assertEquals(dead, { streak: 0, qualifies: false, focusDate: null, freezesConsumed: 0, freezesEarned: 0 })
 
   const alive = advanceStreak({ rewardableMs: SHORT, prevStreak: 5, lastFocusDate: '2026-06-11', now: NOW })
-  assertEquals(alive, { streak: 5, qualifies: false, focusDate: null })
+  assertEquals(alive, { streak: 5, qualifies: false, focusDate: null, freezesConsumed: 0, freezesEarned: 0 })
 })
 
 Deno.test('unverified wall-clock time cannot farm a streak', () => {
@@ -224,7 +211,7 @@ Deno.test('unverified wall-clock time cannot farm a streak', () => {
     lastFocusDate: null,
     now: NOW,
   })
-  assertEquals(r, { streak: 0, qualifies: false, focusDate: null })
+  assertEquals(r, { streak: 0, qualifies: false, focusDate: null, freezesConsumed: 0, freezesEarned: 0 })
 })
 
 Deno.test('tz offset decides which local day a session lands on', () => {
@@ -235,10 +222,75 @@ Deno.test('tz offset decides which local day a session lands on', () => {
   const ny = advanceStreak({
     rewardableMs: QUALIFYING, prevStreak: 2, lastFocusDate: '2026-06-10', now: earlyUtc, tzOffsetMinutes: 240,
   })
-  assertEquals(ny, { streak: 3, qualifies: true, focusDate: '2026-06-11' })
+  assertEquals(ny, { streak: 3, qualifies: true, focusDate: '2026-06-11', freezesConsumed: 0, freezesEarned: 0 })
 
   const utc = advanceStreak({
     rewardableMs: QUALIFYING, prevStreak: 2, lastFocusDate: '2026-06-10', now: earlyUtc, tzOffsetMinutes: 0,
   })
   assertEquals(utc.streak, 1) // the bug this fixes: UTC sees a gap
+})
+
+// ---- streak freezes ----
+
+Deno.test('a freeze covers a single missed day', () => {
+  // Last qualified 10 June, returns 12 June: one fully-missed day (11th).
+  const r = advanceStreak({
+    rewardableMs: QUALIFYING, prevStreak: 5, lastFocusDate: '2026-06-10', now: NOW, streakFreezes: 1,
+  })
+  assertEquals(r.streak, 6)
+  assertEquals(r.freezesConsumed, 1)
+})
+
+Deno.test('two freezes cover a two-day gap; more days than freezes resets', () => {
+  const saved = advanceStreak({
+    rewardableMs: QUALIFYING, prevStreak: 9, lastFocusDate: '2026-06-09', now: NOW, streakFreezes: 2,
+  })
+  assertEquals(saved.streak, 10)
+  assertEquals(saved.freezesConsumed, 2)
+
+  const lost = advanceStreak({
+    rewardableMs: QUALIFYING, prevStreak: 9, lastFocusDate: '2026-06-09', now: NOW, streakFreezes: 1,
+  })
+  assertEquals(lost.streak, 1)
+  assertEquals(lost.freezesConsumed, 0) // freezes are not burned unless they save the streak
+})
+
+Deno.test('a frozen gap keeps the streak visible before the player qualifies', () => {
+  // Short session after one missed day with a banked freeze: streak
+  // still shows alive, nothing consumed yet.
+  const r = advanceStreak({
+    rewardableMs: SHORT, prevStreak: 5, lastFocusDate: '2026-06-10', now: NOW, streakFreezes: 1,
+  })
+  assertEquals(r, { streak: 5, qualifies: false, focusDate: null, freezesConsumed: 0, freezesEarned: 0 })
+})
+
+Deno.test('every 7th consecutive day banks a freeze, capped at 2', () => {
+  const seventh = advanceStreak({
+    rewardableMs: QUALIFYING, prevStreak: 6, lastFocusDate: '2026-06-11', now: NOW, streakFreezes: 0,
+  })
+  assertEquals(seventh.streak, 7)
+  assertEquals(seventh.freezesEarned, 1)
+
+  const atCap = advanceStreak({
+    rewardableMs: QUALIFYING, prevStreak: 13, lastFocusDate: '2026-06-11', now: NOW, streakFreezes: 2,
+  })
+  assertEquals(atCap.streak, 14)
+  assertEquals(atCap.freezesEarned, 0)
+
+  // Spending a freeze on the way to day 7 frees room to earn one back.
+  const spendAndEarn = advanceStreak({
+    rewardableMs: QUALIFYING, prevStreak: 6, lastFocusDate: '2026-06-10', now: NOW, streakFreezes: 2,
+  })
+  assertEquals(spendAndEarn.streak, 7)
+  assertEquals(spendAndEarn.freezesConsumed, 1)
+  assertEquals(spendAndEarn.freezesEarned, 1)
+})
+
+Deno.test('same-day sessions never earn or spend freezes', () => {
+  const r = advanceStreak({
+    rewardableMs: QUALIFYING, prevStreak: 7, lastFocusDate: '2026-06-12', now: NOW, streakFreezes: 1,
+  })
+  assertEquals(r.streak, 7)
+  assertEquals(r.freezesConsumed, 0)
+  assertEquals(r.freezesEarned, 0)
 })
