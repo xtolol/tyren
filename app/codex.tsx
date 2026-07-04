@@ -2,7 +2,7 @@ import Crest from "@/app/components/sigil/Crest";
 import { formatPerkBonus, SEAL_LABELS } from "@/src/core/relics";
 import { useMapStore } from "@/src/stores/useMapStore";
 import { useRelicStore } from "@/src/stores/useRelicStore";
-import { fonts, palette, sealColors, sealColorsDim } from "@/src/theme";
+import { fonts, levelAccent, palette, sealColors } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect } from "react";
@@ -58,31 +58,30 @@ export default function CodexScreen() {
           const reached = !!progress[location.id];
 
           if (relic) {
-            const color = sealColors[relic.seal];
+            const level = levelAccent(location.sort_order);
             return (
               <TouchableOpacity
                 key={location.id}
-                style={[styles.card, { borderColor: sealColorsDim[relic.seal] }]}
+                style={[styles.card, { borderColor: level.border, backgroundColor: level.card }]}
                 activeOpacity={0.85}
                 onPress={() =>
                   router.push({ pathname: "/relic/[id]", params: { id: location.id } } as never)
                 }
               >
                 {relic.equippedSlot != null && (
-                  <View style={[styles.equipBadge, { backgroundColor: color }]}>
+                  <View style={[styles.equipBadge, { backgroundColor: level.accent }]}>
                     <Text style={styles.equipBadgeText}>EQUIPPED</Text>
                   </View>
                 )}
                 <Crest
                   size={72}
-                  progress={null}
-                  color={color}
-                  dimColor={sealColorsDim[relic.seal]}
+                  color={level.accent}
+                  dimColor={level.faint}
                   glyphIndex={location.sort_order}
                 />
                 <Text style={styles.cardCaption}>LEVEL {location.sort_order + 1}</Text>
                 <Text style={styles.cardName}>{location.relic_name}</Text>
-                <Text style={[styles.cardSeal, { color }]}>
+                <Text style={[styles.cardSeal, { color: sealColors[relic.seal] }]}>
                   {SEAL_LABELS[relic.seal].toUpperCase()}
                 </Text>
                 <Text style={styles.cardPerk}>
@@ -92,13 +91,20 @@ export default function CodexScreen() {
             );
           }
 
+          const level = levelAccent(location.sort_order);
           return (
-            <View key={location.id} style={[styles.card, styles.cardLocked]}>
+            <View
+              key={location.id}
+              style={[
+                styles.card,
+                styles.cardLocked,
+                { backgroundColor: level.card, borderColor: level.faint },
+              ]}
+            >
               <Crest
                 size={72}
-                progress={null}
-                color="rgba(244,234,218,0.28)"
-                dimColor="rgba(244,234,218,0.1)"
+                color={level.accent}
+                dimColor={level.faint}
                 glyphIndex={location.sort_order}
               />
               <Text style={styles.cardCaption}>LEVEL {location.sort_order + 1}</Text>
@@ -147,7 +153,7 @@ const styles = StyleSheet.create({
   count: {
     fontSize: 10,
     fontFamily: fonts.pixel,
-    color: palette.goldDim,
+    color: palette.textDim,
   },
   subtitle: {
     fontSize: 13,
@@ -166,9 +172,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "47.5%",
-    backgroundColor: palette.card,
     borderWidth: 1,
-    borderColor: palette.hairline,
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 12,
@@ -177,7 +181,6 @@ const styles = StyleSheet.create({
   },
   cardLocked: {
     opacity: 0.75,
-    backgroundColor: palette.bgRaised,
   },
   equipBadge: {
     position: "absolute",

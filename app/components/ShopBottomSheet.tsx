@@ -1,12 +1,14 @@
 import DustIcon from "@/assets/images/dust-16px.svg";
 import ShardIcon from "@/assets/images/shard-16px.svg";
 import { SEAL_LABELS, sealAtLeast } from "@/src/core/relics";
+import { useCurrentLevelAccent } from "@/src/hooks/useLevelAccent";
 import type { ShopItem } from "@/src/lib/api";
 import { api } from "@/src/lib/api";
 import { useMapStore } from "@/src/stores/useMapStore";
 import { usePlayerStore } from "@/src/stores/usePlayerStore";
 import { useRelicStore } from "@/src/stores/useRelicStore";
-import { fonts, palette, sealColors } from "@/src/theme";
+import type { LevelAccent } from "@/src/theme";
+import { fonts, levelAccent, palette, sealColors } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import Crest from "./sigil/Crest";
 
@@ -82,14 +84,20 @@ function LevelItemRow({
   meetsSeal: boolean;
 }) {
   const sealColor = item.required_seal ? sealColors[item.required_seal] : palette.gold;
+  const level = levelAccent(glyphIndex);
 
   return (
-    <View style={[styles.levelItemCard, !meetsSeal && styles.dimmed]}>
+    <View
+      style={[
+        styles.levelItemCard,
+        { backgroundColor: level.card, borderColor: level.border },
+        !meetsSeal && styles.dimmed,
+      ]}
+    >
       <View style={styles.levelItemIcon}>
         <Crest
           size={40}
-          progress={null}
-          color={meetsSeal ? palette.gold : palette.textFaint}
+          color={meetsSeal ? level.accent : palette.textFaint}
           dimColor="transparent"
           glyphIndex={glyphIndex}
         />
@@ -112,10 +120,24 @@ function LevelItemRow({
   );
 }
 
-function BoosterCard({ item, affordable }: { item: ShopItem; affordable: boolean }) {
+function BoosterCard({
+  item,
+  affordable,
+  theme,
+}: {
+  item: ShopItem;
+  affordable: boolean;
+  theme: LevelAccent;
+}) {
   return (
-    <View style={[styles.gridCard, !affordable && styles.dimmed]}>
-      <Ionicons name="hourglass-outline" size={26} color={palette.gold} />
+    <View
+      style={[
+        styles.gridCard,
+        { backgroundColor: theme.glow, borderColor: theme.faint },
+        !affordable && styles.dimmed,
+      ]}
+    >
+      <Ionicons name="hourglass-outline" size={26} color={theme.accent} />
       <Text style={styles.gridItemDuration}>
         {formatBoostDuration(item.effect.duration_ms)}
       </Text>
@@ -125,9 +147,23 @@ function BoosterCard({ item, affordable }: { item: ShopItem; affordable: boolean
   );
 }
 
-function TimeDustCard({ item, affordable }: { item: ShopItem; affordable: boolean }) {
+function TimeDustCard({
+  item,
+  affordable,
+  theme,
+}: {
+  item: ShopItem;
+  affordable: boolean;
+  theme: LevelAccent;
+}) {
   return (
-    <View style={[styles.gridCard, !affordable && styles.dimmed]}>
+    <View
+      style={[
+        styles.gridCard,
+        { backgroundColor: theme.glow, borderColor: theme.faint },
+        !affordable && styles.dimmed,
+      ]}
+    >
       <View style={styles.timeDustIconContainer}>
         <DustIcon width={28} height={28} />
         <Text style={styles.timeDustAmount}>
@@ -162,6 +198,8 @@ const ShopBottomSheet = React.forwardRef<
   const shards = usePlayerStore((s) => s.shards);
   const locations = useMapStore((s) => s.locations);
   const relics = useRelicStore((s) => s.relics);
+  // Sheet chrome follows the current level, like Home.
+  const theme = useCurrentLevelAccent();
 
   useEffect(() => {
     if (!isOpen || catalog !== null) return;
@@ -326,8 +364,8 @@ const ShopBottomSheet = React.forwardRef<
       enablePanDownToClose={true}
       backdropComponent={renderBackdrop}
       onChange={handleSheetChanges}
-      backgroundStyle={{ backgroundColor: palette.bgRaised }}
-      handleIndicatorStyle={{ backgroundColor: palette.goldDim, width: 40 }}
+      backgroundStyle={{ backgroundColor: theme.card }}
+      handleIndicatorStyle={{ backgroundColor: theme.dim, width: 40 }}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -347,7 +385,7 @@ const ShopBottomSheet = React.forwardRef<
           catalogError ? (
             <Text style={styles.catalogError}>{catalogError}</Text>
           ) : (
-            <ActivityIndicator color={palette.gold} style={{ marginTop: 48 }} />
+            <ActivityIndicator color={theme.accent} style={{ marginTop: 48 }} />
           )
         ) : (
           <>
@@ -390,7 +428,7 @@ const ShopBottomSheet = React.forwardRef<
                       activeOpacity={0.8}
                       onPress={() => handlePurchase(item)}
                     >
-                      <BoosterCard item={item} affordable={canAfford(item)} />
+                      <BoosterCard item={item} affordable={canAfford(item)} theme={theme} />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -412,7 +450,7 @@ const ShopBottomSheet = React.forwardRef<
                       activeOpacity={0.8}
                       onPress={() => handlePurchase(item)}
                     >
-                      <TimeDustCard item={item} affordable={canAfford(item)} />
+                      <TimeDustCard item={item} affordable={canAfford(item)} theme={theme} />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -457,7 +495,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 32,
     height: 32,
-    backgroundColor: palette.card,
+    backgroundColor: "rgba(244, 234, 218, 0.08)",
     borderRadius: 100,
   },
   placeholderLeft: {
@@ -489,8 +527,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     borderWidth: 1,
-    borderColor: palette.cardBorder,
-    backgroundColor: palette.card,
     borderRadius: 14,
     padding: 14,
     marginTop: 8,
@@ -548,9 +584,7 @@ const styles = StyleSheet.create({
   },
   gridCard: {
     width: "100%",
-    backgroundColor: palette.card,
     borderWidth: 1,
-    borderColor: palette.hairline,
     borderRadius: 12,
     padding: 12,
     alignItems: "center",

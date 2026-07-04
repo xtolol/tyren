@@ -1,4 +1,4 @@
-import { formatPerkBonus, perkMultiplier, sessionsToNextSeal, nextSeal, SEAL_LABELS } from "@/src/core/relics";
+import { formatPerkBonus, perkMultiplier } from "@/src/core/relics";
 import type { MapResult, RelicResult } from "@/src/lib/api";
 import { useFocusTimer } from "@/src/hooks/useFocusTimer";
 import { useFocusTimerStore } from "@/src/stores/useFocusTimerStore";
@@ -25,7 +25,6 @@ import RankUpModal, { RelicMoment } from "./RankUpModal";
 import SessionSummaryPopup from "./SessionSummaryPopup";
 import ShopBottomSheet, { ShopBottomSheetRef } from "./ShopBottomSheet";
 import Crest from "./sigil/Crest";
-import RankTrack from "./sigil/RankTrack";
 import RelicCard from "./sigil/RelicCard";
 
 // Mirrors complete_focus_session's fragment cadence (1 fragment / 30
@@ -107,15 +106,9 @@ export default function HomeScreen() {
   // Gate bar fills toward the broken gate; the HP bar drains toward the kill.
   const barPct = bossStage ? (maxHp > 0 ? (hp / maxHp) * 100 : 0) : progressPct;
 
-  // ---- Equipped perks & the primary relic's seal journey ----
+  // ---- Equipped perks (seal journeys live on each relic's detail page) ----
   const equipped = equippedRelics(relics);
   const multiplier = perkMultiplier(equipped.map(([, r]) => r.seal));
-  const primary = equipped[0] ?? null;
-  const primaryLocation = primary ? locations.find((l) => l.id === primary[0]) : null;
-  const primaryNext = primary ? nextSeal(primary[1].seal) : null;
-  const primaryToNext = primary
-    ? sessionsToNextSeal(primary[1].seal, primary[1].sealSessions)
-    : null;
 
   type SessionResult = {
     elapsedMs: number; dust: number; shards: number; xp: number;
@@ -244,7 +237,7 @@ export default function HomeScreen() {
               : `${formatCountdown(nextFragmentIn)} until the next ${current?.fragment_name ?? "fragment"}`}
         </Text>
 
-        {/* The relic strip: equipped perks + the primary seal journey */}
+        {/* The relic strip: equipped perk chips (tap → loadout) */}
         {equipped.length > 0 ? (
           <View style={styles.relicStrip}>
             <View style={styles.perkRow}>
@@ -267,16 +260,6 @@ export default function HomeScreen() {
                 );
               })}
             </View>
-            {primary && (
-              <>
-                <RankTrack seal={primary[1].seal} />
-                <Text style={styles.sealHint}>
-                  {primaryNext && primaryToNext != null
-                    ? `${primaryToNext} focus session${primaryToNext === 1 ? "" : "s"} to ${SEAL_LABELS[primaryNext]} — ${primaryLocation?.perk_name ?? "the perk"} becomes ${formatPerkBonus(primaryNext)}`
-                    : `${SEAL_LABELS.mythic} — ${primaryLocation?.perk_name ?? "the perk"} at its peak`}
-                </Text>
-              </>
-            )}
           </View>
         ) : (
           <TouchableOpacity
@@ -531,13 +514,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: fonts.ui,
     color: palette.textDim,
-  },
-  sealHint: {
-    fontSize: 11,
-    fontFamily: fonts.ui,
-    color: palette.textFaint,
-    textAlign: "center",
-    paddingHorizontal: 16,
   },
   bottomContainer: {
     gap: 20,

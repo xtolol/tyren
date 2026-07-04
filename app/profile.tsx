@@ -2,11 +2,12 @@ import Crest from '@/app/components/sigil/Crest';
 import DustIcon from '@/assets/images/dust-16px.svg';
 import ShardIcon from '@/assets/images/shard-16px.svg';
 import { SEAL_LABELS } from '@/src/core/relics';
+import { useCurrentLevelAccent } from '@/src/hooks/useLevelAccent';
 import { useAuthStore } from '@/src/stores/useAuthStore';
 import { useMapStore } from '@/src/stores/useMapStore';
 import { usePlayerStore } from '@/src/stores/usePlayerStore';
 import { equippedRelics, useRelicStore } from '@/src/stores/useRelicStore';
-import { fonts, palette, sealColors, sealColorsDim } from '@/src/theme';
+import { fonts, levelAccent, palette } from '@/src/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
@@ -65,13 +66,16 @@ export default function ProfileScreen() {
   const mapProgress = useMapStore((s) => s.progress);
   const relics = useRelicStore((s) => s.relics);
   const current = locations.find((l) => mapProgress[l.id]?.status === 'current');
+  // Screen chrome follows the current level, like Home; the crest keeps
+  // the equipped relic's home-level identity.
+  const theme = useCurrentLevelAccent();
 
-  // The profile crest wears the primary equipped relic; before the first
-  // relic it shows the current location's seal-in-waiting.
+  // The profile crest wears the primary equipped relic in its home level's
+  // colors; before the first relic it shows the current location's crest.
   const primary = equippedRelics(relics)[0] ?? null;
   const primaryLocation = primary ? locations.find((l) => l.id === primary[0]) : null;
-  const crestColor = primary ? sealColors[primary[1].seal] : palette.gold;
-  const crestDim = primary ? sealColorsDim[primary[1].seal] : palette.goldFaint;
+  const crestIndex = primaryLocation?.sort_order ?? current?.sort_order ?? 0;
+  const crestAccent = levelAccent(crestIndex);
   const relicCount = Object.keys(relics).length;
 
   const username = (user?.user_metadata?.username as string | undefined) ?? user?.email ?? 'Seeker';
@@ -109,23 +113,22 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={28} color={palette.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>TYREN</Text>
+          <Text style={[styles.headerTitle, { color: theme.accent }]}>TYREN</Text>
           <View style={{ width: 28 }} />
         </View>
 
         <Text style={styles.resultsTitle}>Your Results</Text>
 
         {/* Seeker card: the equipped relic crest as the avatar */}
-        <View style={styles.characterCard}>
+        <View style={[styles.characterCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
           <Crest
             size={140}
-            progress={null}
-            color={crestColor}
-            dimColor={crestDim}
-            glyphIndex={primaryLocation?.sort_order ?? current?.sort_order ?? 0}
+            color={crestAccent.accent}
+            dimColor={crestAccent.faint}
+            glyphIndex={crestIndex}
           />
           <Text style={styles.characterName}>{username}</Text>
-          <Text style={styles.characterLevel}>
+          <Text style={[styles.characterLevel, { color: theme.dim }]}>
             {primary && primaryLocation
               ? `${primaryLocation.relic_name.toUpperCase()} · ${SEAL_LABELS[primary[1].seal].toUpperCase()}`
               : current
@@ -140,7 +143,10 @@ export default function ProfileScreen() {
         </View>
 
         {/* Share + Sign Out */}
-        <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+        <TouchableOpacity
+          style={[styles.shareButton, { borderColor: theme.border }]}
+          onPress={handleShare}
+        >
           <Text style={styles.shareButtonText}>Share profile</Text>
         </TouchableOpacity>
 
@@ -150,8 +156,8 @@ export default function ProfileScreen() {
 
         {/* This Week recap */}
         {weeklyRecap && weeklyRecap.sessions > 0 && (
-          <View style={styles.recapCard}>
-            <Text style={styles.recapTitle}>THIS WEEK</Text>
+          <View style={[styles.recapCard, { backgroundColor: theme.card, borderColor: theme.faint }]}>
+            <Text style={[styles.recapTitle, { color: theme.dim }]}>THIS WEEK</Text>
             <Text style={styles.recapHeadline}>
               You reclaimed {formatFocusTime(weeklyRecap.focus_ms)}
             </Text>
@@ -249,7 +255,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: fonts.pixelBold,
     letterSpacing: 4,
-    color: palette.gold,
   },
   resultsTitle: {
     fontSize: 32,
@@ -260,9 +265,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   characterCard: {
-    backgroundColor: palette.card,
     borderWidth: 1,
-    borderColor: palette.cardBorder,
     borderRadius: 20,
     marginHorizontal: 16,
     padding: 24,
@@ -279,7 +282,6 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontFamily: fonts.pixel,
     letterSpacing: 2,
-    color: palette.goldDim,
     textAlign: 'center',
   },
   codexLink: {
@@ -291,7 +293,6 @@ const styles = StyleSheet.create({
   shareButton: {
     backgroundColor: palette.bgRaised,
     borderWidth: 1,
-    borderColor: palette.cardBorder,
     borderRadius: 100,
     marginHorizontal: 16,
     marginTop: 16,
@@ -316,9 +317,7 @@ const styles = StyleSheet.create({
     color: palette.textFaint,
   },
   recapCard: {
-    backgroundColor: palette.card,
     borderWidth: 1,
-    borderColor: palette.hairline,
     borderRadius: 16,
     marginHorizontal: 16,
     marginTop: 24,
@@ -327,7 +326,6 @@ const styles = StyleSheet.create({
   recapTitle: {
     fontSize: 8,
     fontFamily: fonts.pixel,
-    color: palette.goldDim,
     letterSpacing: 2,
     marginBottom: 6,
   },

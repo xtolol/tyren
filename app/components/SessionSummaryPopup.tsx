@@ -2,6 +2,7 @@ import DustIcon from "@/assets/images/dust-16px.svg";
 import ShardIcon from "@/assets/images/shard-16px.svg";
 import type { SessionRewards } from "@/src/core/rewards/types";
 import { SEAL_LABELS } from "@/src/core/relics";
+import { useCurrentLevelAccent } from "@/src/hooks/useLevelAccent";
 import type { MapResult, RelicResult } from "@/src/lib/api";
 import { fonts, palette, sealColors } from "@/src/theme";
 import React from "react";
@@ -42,6 +43,8 @@ export default function SessionSummaryPopup({
   freezesConsumed = 0,
 }: SessionSummaryPopupProps) {
   const forfeited = variant === 'forfeited';
+  // The summary card wears the current level's colors, like Home.
+  const theme = useCurrentLevelAccent();
   const gained = !forfeited && map != null && map.stage === 'gate' && map.fragments_gained > 0;
   const struck = !forfeited && map != null && map.stage === 'boss' && map.damage_dealt > 0;
   const rankUps = forfeited ? [] : relics.filter((r) => r.ranked_up);
@@ -54,7 +57,13 @@ export default function SessionSummaryPopup({
       onRequestClose={onContinue}
     >
       <View style={styles.overlay}>
-        <View style={[styles.card, forfeited && styles.cardForfeited]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: theme.card, borderColor: theme.border },
+            forfeited && styles.cardForfeited,
+          ]}
+        >
           <Text style={styles.title}>
             {forfeited ? 'SESSION BROKEN' : 'SESSION COMPLETE'}
           </Text>
@@ -92,7 +101,7 @@ export default function SessionSummaryPopup({
 
           {gained && map && (
             <View style={styles.bossSection}>
-              <Text style={styles.bossStrike}>
+              <Text style={[styles.bossStrike, { color: theme.bright }]}>
                 You collected {map.fragments_gained}{' '}
                 {map.fragment_name}
                 {map.fragments_gained === 1 ? '' : 's'}
@@ -109,7 +118,7 @@ export default function SessionSummaryPopup({
             <View style={styles.bossSection}>
               {map.defeated ? (
                 <>
-                  <Text style={styles.bossDefeated}>
+                  <Text style={[styles.bossDefeated, { color: theme.bright }]}>
                     {map.boss_name} has fallen!
                   </Text>
                   <Text style={styles.bossDetail}>
@@ -117,7 +126,7 @@ export default function SessionSummaryPopup({
                     +{map.rewards.xp} XP claimed from the victory
                   </Text>
                   {map.relic_earned ? (
-                    <Text style={styles.relicNote}>
+                    <Text style={[styles.relicNote, { color: theme.accent }]}>
                       It leaves behind {map.relic_earned.relic_name}.
                     </Text>
                   ) : null}
@@ -127,7 +136,7 @@ export default function SessionSummaryPopup({
                 </>
               ) : (
                 <>
-                  <Text style={styles.bossStrike}>
+                  <Text style={[styles.bossStrike, { color: theme.bright }]}>
                     You struck {map.boss_name} for {map.damage_dealt} damage
                   </Text>
                   <Text style={styles.bossDetail}>
@@ -152,18 +161,18 @@ export default function SessionSummaryPopup({
           )}
 
           {!forfeited && freezesConsumed > 0 && (
-            <Text style={styles.freezeNote}>
+            <Text style={[styles.freezeNote, { color: theme.dim }]}>
               ❄️ A streak freeze covered {freezesConsumed === 1 ? 'a missed day' : `${freezesConsumed} missed days`} — your streak held.
             </Text>
           )}
           {!forfeited && freezesEarned > 0 && (
-            <Text style={styles.freezeNote}>
+            <Text style={[styles.freezeNote, { color: theme.dim }]}>
               ❄️ You banked a streak freeze. It&apos;ll save your streak on a day you miss.
             </Text>
           )}
 
           <TouchableOpacity
-            style={styles.button}
+            style={[styles.button, { borderColor: theme.border }]}
             onPress={onContinue}
             activeOpacity={0.8}
           >
@@ -187,9 +196,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
-    backgroundColor: palette.card,
     borderWidth: 1,
-    borderColor: palette.cardBorder,
     borderRadius: 24,
     padding: 28,
     alignItems: "center",
@@ -259,13 +266,11 @@ const styles = StyleSheet.create({
   bossStrike: {
     fontSize: 16,
     fontFamily: fonts.serif,
-    color: palette.goldBright,
     textAlign: "center",
   },
   bossDefeated: {
     fontSize: 18,
     fontFamily: fonts.serif,
-    color: palette.goldBright,
     textAlign: "center",
   },
   bossDetail: {
@@ -277,13 +282,11 @@ const styles = StyleSheet.create({
   relicNote: {
     fontSize: 14,
     fontFamily: fonts.serif,
-    color: palette.gold,
     textAlign: "center",
   },
   freezeNote: {
     fontSize: 13,
     fontFamily: fonts.ui,
-    color: palette.goldDim,
     textAlign: "center",
     lineHeight: 19,
     marginTop: -12,
@@ -298,7 +301,6 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: palette.bgRaised,
     borderWidth: 1,
-    borderColor: palette.cardBorder,
     borderRadius: 32,
     paddingVertical: 14,
     width: "100%",

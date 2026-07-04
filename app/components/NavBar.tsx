@@ -18,11 +18,10 @@ function formatCurrency(value: number): string {
 }
 
 // The pixel top bar (design 1B): map · dust · TYREN · shards · stats.
-// The ember variant recolors the wordmark during a boss fight.
-export default function NavBar({ variant = 'gold' }: { variant?: 'gold' | 'ember' }) {
+// The wordmark wears the current level's accent (ember during a boss fight).
+export default function NavBar({ accent = palette.gold }: { accent?: string }) {
   const { dust, shards } = usePlayerStore();
   const router = useRouter();
-  const accent = variant === 'ember' ? palette.ember : palette.gold;
 
   return (
     <View style={styles.container}>

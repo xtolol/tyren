@@ -272,8 +272,37 @@ relic-crest cards, procedural SVG — no illustrator), extended with the **Relic
 - 38 deno tests green (seal math added); `tsc` + lint clean; advisors at baseline.
 - Client: Home rebuilt around the procedural crest card (gate/boss states, ember
   boss variant, rank-up moment queue); Map/Codex/Loadout/Relic-detail/Profile/Auth
-  all in the gold system; Silkscreen pixel font bundled (OFL); video background,
+  all in the Sigil system; Silkscreen pixel font bundled (OFL); video background,
   `MapProgressHeader`, `ProgressBar`, `GridCell`, chainbreaker UI all removed.
+
+### Status addendum (2026-07-04, per-level theming + the six-level world)
+- Gold is Level 1's identity, not the app's. `levelAccent(sort_order)` in
+  `src/theme.ts` gives each level a color world; seal metals (`sealColors`)
+  are reserved for the rank track + seal-rank labels and never used as relic
+  identity. Boss stage always overrides with the universal ember-red variant.
+- The world map is now the six-level codex ladder (migration
+  `phase8_world_map_yawning_depths_to_zalthar_unbound`, ids stable):
+  L1 Zalthar's Chains (gold, spark) · L2 Yawning Depths (`swirling_depths`,
+  teal, rings, relic The Fathom Eye/Depth Ward) · L3 Withered Plains (sage,
+  sprig, The Last Sprig/Bloomcaller) · L4 Hollowroot (`the_vexed_ruins`,
+  root-ember, its original face design, relic Hollowroot/Root Ward — restored
+  per Hassan after briefly being "Hollow Vigil") · L5 Emberfall Reach (new
+  row, molten red, drop, The First Ember/Emberguard) · L6 Zalthar Unbound
+  (`zalthars_throne`, bone white, starburst, The Broken Crown/Kingslayer).
+- Map page shows completed levels + the current one + only the next two
+  (0.55 / 0.3 opacity fade); the rest stays hidden until reached. Codex shows
+  all six with colored glyphs even when locked, per the design.
+- Home carries the in-card PROGRESS/HP bar from the level designs; Crest has
+  one bespoke glyph per level and no `progress` prop. `tsc` + lint clean.
+- Gold is no longer the app chrome: `LevelAccent` gained `dim` + `card`
+  (tinted surface), map/codex/relic cards sit on their level's surface, and
+  player-following screens (profile "Your Results", shop, inventory, session
+  summary) theme via `useCurrentLevelAccent()` (src/hooks/useLevelAccent.ts)
+  the way Home does. Gold remains only as L1's accent, the auth screen brand,
+  and neutral fallbacks.
+- Relic seal journeys live only on the relic detail page (`/relic/[id]`),
+  reached from the codex or the loadout (row tap → detail; the EQUIP badge
+  toggles). Home shows just the equipped perk chips + total multiplier.
 
 ### Follow-ups
 - [ ] Settings screen from the design set (blocked apps, session length,
@@ -283,6 +312,8 @@ relic-crest cards, procedural SVG — no illustrator), extended with the **Relic
 - [ ] Retune seal thresholds (3/6/12) and level-item prices after playtesting —
   data-only (`relic_seal_sessions_required` + `shop_items`).
 - [ ] Victory state for clearing Zalthar's Throne (carried from Phase 7).
+- [ ] Designs for levels 3+ — each needs a name/relic pass (data migration),
+  a `LevelAccent` entry, and a bespoke Crest glyph (placeholders render until then).
 
 ## Cross-cutting rules (apply from Phase 0 onward)
 

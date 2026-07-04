@@ -1,6 +1,6 @@
 import type { SealRank } from "@/src/core/relics";
 import { formatPerkBonus, SEAL_LABELS, SEAL_RANKS } from "@/src/core/relics";
-import { fonts, palette, sealColors, sealColorsDim } from "@/src/theme";
+import { fonts, levelAccent, palette, sealColors } from "@/src/theme";
 import React from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Crest from "./sigil/Crest";
@@ -29,39 +29,45 @@ export default function RankUpModal({
     return null;
   }
 
-  const color = sealColors[moment.seal];
-  const dim = sealColorsDim[moment.seal];
+  // The relic wears its home level's colors; the seal metal marks the rank.
+  const level = levelAccent(moment.glyphIndex);
+  const sealColor = sealColors[moment.seal];
   const prevIndex = SEAL_RANKS.indexOf(moment.seal) - 1;
   const prevSeal = prevIndex >= 0 ? SEAL_RANKS[prevIndex] : null;
 
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onContinue}>
       <View style={styles.overlay}>
-        <Text style={[styles.header, { color }]}>
+        <Text style={[styles.header, { color: level.bright }]}>
           {moment.kind === "earned" ? "RELIC CLAIMED" : "RANK UP"}
         </Text>
 
         <View style={styles.cardWrap}>
-          <RelicCard label={SEAL_LABELS[moment.seal].toUpperCase()} accent={color} borderColor={color}>
-            <Crest size={180} progress={null} color={color} dimColor={dim} glyphIndex={moment.glyphIndex} />
+          <RelicCard
+            label={SEAL_LABELS[moment.seal].toUpperCase()}
+            accent={sealColor}
+            borderColor={level.border}
+            backgroundColor={level.card}
+          >
+            <Crest size={180} color={level.accent} dimColor={level.faint} glyphIndex={moment.glyphIndex} />
             <Text style={styles.relicName}>{moment.relicName}</Text>
           </RelicCard>
         </View>
 
-        <View style={[styles.perkChip, { borderColor: dim }]}>
+        <View style={[styles.perkChip, { borderColor: level.border }]}>
           <Text style={styles.perkName}>{moment.perkName.toUpperCase()}</Text>
           {moment.kind === "rankup" && prevSeal ? (
             <Text style={styles.perkBonus}>
               <Text style={styles.perkBonusOld}>{formatPerkBonus(prevSeal)}</Text>
               {"  →  "}
-              <Text style={{ color }}>{formatPerkBonus(moment.seal)}</Text>
+              <Text style={{ color: sealColor }}>{formatPerkBonus(moment.seal)}</Text>
             </Text>
           ) : (
-            <Text style={[styles.perkBonus, { color }]}>{formatPerkBonus(moment.seal)}</Text>
+            <Text style={[styles.perkBonus, { color: sealColor }]}>{formatPerkBonus(moment.seal)}</Text>
           )}
         </View>
 
-        <TouchableOpacity style={[styles.button, { borderColor: color }]} onPress={onContinue} activeOpacity={0.8}>
+        <TouchableOpacity style={[styles.button, { borderColor: level.border }]} onPress={onContinue} activeOpacity={0.8}>
           <Text style={styles.buttonText}>Continue</Text>
         </TouchableOpacity>
       </View>
