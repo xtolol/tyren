@@ -14,15 +14,17 @@ export default function RelicCard({
   label,
   accent,
   borderColor,
+  backgroundColor = palette.card,
   children,
 }: {
   label: string;
   accent: string;
   borderColor: string;
+  backgroundColor?: string;
   children: React.ReactNode;
 }) {
   return (
-    <View style={[styles.card, { borderColor }]}>
+    <View style={[styles.card, { borderColor, backgroundColor }]}>
       <CornerDiamond color={accent} position={{ top: 10, left: 10 }} />
       <CornerDiamond color={accent} position={{ top: 10, right: 10 }} />
       <CornerDiamond color={accent} position={{ bottom: 10, left: 10 }} />

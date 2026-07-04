@@ -10,7 +10,7 @@ import {
 } from "@/src/core/relics";
 import { useMapStore } from "@/src/stores/useMapStore";
 import { equippedRelics, useRelicStore } from "@/src/stores/useRelicStore";
-import { fonts, palette, sealColors, sealColorsDim } from "@/src/theme";
+import { fonts, levelAccent, palette, sealColors } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -53,8 +53,9 @@ export default function RelicDetailScreen() {
     );
   }
 
-  const color = sealColors[relic.seal];
-  const dim = sealColorsDim[relic.seal];
+  // The relic wears its home level's colors; the seal metal marks the rank.
+  const level = levelAccent(location.sort_order);
+  const sealColor = sealColors[relic.seal];
   const upcoming = nextSeal(relic.seal);
   const toNext = sessionsToNextSeal(relic.seal, relic.sealSessions);
   const equipped = relic.equippedSlot != null;
@@ -103,14 +104,14 @@ export default function RelicDetailScreen() {
       >
         <RelicCard
           label={SEAL_LABELS[relic.seal].toUpperCase()}
-          accent={color}
-          borderColor={color}
+          accent={sealColor}
+          borderColor={level.border}
+          backgroundColor={level.card}
         >
           <Crest
             size={170}
-            progress={null}
-            color={color}
-            dimColor={dim}
+            color={level.accent}
+            dimColor={level.faint}
             glyphIndex={location.sort_order}
           />
           <Text style={styles.relicName}>{location.relic_name}</Text>
@@ -123,13 +124,13 @@ export default function RelicDetailScreen() {
           </View>
         ) : null}
 
-        <View style={[styles.perkBox, { borderColor: dim }]}>
+        <View style={[styles.perkBox, { borderColor: level.border, backgroundColor: level.card }]}>
           <View style={styles.perkHeader}>
             <View style={styles.perkTitleRow}>
-              <View style={[styles.perkDiamond, { backgroundColor: color }]} />
+              <View style={[styles.perkDiamond, { backgroundColor: level.accent }]} />
               <Text style={styles.perkName}>{location.perk_name}</Text>
             </View>
-            <Text style={[styles.perkBonus, { color }]}>{formatPerkBonus(relic.seal)}</Text>
+            <Text style={[styles.perkBonus, { color: sealColor }]}>{formatPerkBonus(relic.seal)}</Text>
           </View>
           <Text style={styles.perkDescription}>
             Passive progress multiplier while equipped. Rises with every rank —
@@ -145,7 +146,7 @@ export default function RelicDetailScreen() {
         </Text>
 
         <TouchableOpacity
-          style={[styles.equipButton, { borderColor: color }, equipped && styles.unequipButton]}
+          style={[styles.equipButton, { borderColor: level.accent }, equipped && styles.unequipButton]}
           onPress={toggleEquip}
           disabled={busy}
           activeOpacity={0.8}

@@ -1,10 +1,12 @@
 import { formatPerkBonus } from "@/src/core/relics";
+import { useCurrentLevelAccent } from "@/src/hooks/useLevelAccent";
 import type { ActiveBoost, ShopItem } from "@/src/lib/api";
 import { api } from "@/src/lib/api";
 import { useMapStore } from "@/src/stores/useMapStore";
 import { usePlayerStore } from "@/src/stores/usePlayerStore";
 import { equippedRelics, useRelicStore } from "@/src/stores/useRelicStore";
-import { fonts, palette, sealColors } from "@/src/theme";
+import type { LevelAccent } from "@/src/theme";
+import { fonts, levelAccent, palette } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -50,7 +52,7 @@ function formatRemaining(ms: number): string {
 
 // Live countdown for the active boost banner; ticks only while mounted
 // (i.e. while the sheet is open).
-function BoostBanner({ boost }: { boost: ActiveBoost | null }) {
+function BoostBanner({ boost, theme }: { boost: ActiveBoost | null; theme: LevelAccent }) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -62,18 +64,18 @@ function BoostBanner({ boost }: { boost: ActiveBoost | null }) {
   const remainingMs = boost ? new Date(boost.expires_at).getTime() - now : 0;
 
   return (
-    <View style={styles.boostContainer}>
+    <View style={[styles.boostContainer, { backgroundColor: theme.glow, borderColor: theme.faint }]}>
       <Ionicons
         name="hourglass-outline"
         size={20}
-        color={boost && remainingMs > 0 ? palette.gold : palette.textFaint}
+        color={boost && remainingMs > 0 ? theme.accent : palette.textFaint}
       />
       {boost && remainingMs > 0 ? (
         <View style={styles.boostTextContainer}>
           <Text style={styles.boostLabel}>
             {boost.effect.value ?? "?"}× BOOST ACTIVE
           </Text>
-          <Text style={styles.boostTime}>{formatRemaining(remainingMs)}</Text>
+          <Text style={[styles.boostTime, { color: theme.accent }]}>{formatRemaining(remainingMs)}</Text>
         </View>
       ) : (
         <Text style={[styles.boostLabel, { color: palette.textFaint }]}>
@@ -93,6 +95,8 @@ const InventoryBottomSheet = React.forwardRef<
   const activeBoosts = usePlayerStore((s) => s.activeBoosts);
   const relics = useRelicStore((s) => s.relics);
   const locations = useMapStore((s) => s.locations);
+  // Sheet chrome follows the current level, like Home.
+  const theme = useCurrentLevelAccent();
 
   // Catalog provides names/effects for owned item ids.
   const [catalog, setCatalog] = useState<ShopItem[] | null>(null);
@@ -230,8 +234,8 @@ const InventoryBottomSheet = React.forwardRef<
       enablePanDownToClose={true}
       backdropComponent={renderBackdrop}
       onChange={handleSheetChanges}
-      backgroundStyle={{ backgroundColor: palette.bgRaised }}
-      handleIndicatorStyle={{ backgroundColor: palette.goldDim, width: 40 }}
+      backgroundStyle={{ backgroundColor: theme.card }}
+      handleIndicatorStyle={{ backgroundColor: theme.dim, width: 40 }}
     >
       <BottomSheetView style={styles.sheetContent}>
         <View style={styles.topBar}>
@@ -242,19 +246,20 @@ const InventoryBottomSheet = React.forwardRef<
           </TouchableOpacity>
         </View>
 
-        <BoostBanner boost={liveBoost} />
+        <BoostBanner boost={liveBoost} theme={theme} />
 
         {/* Equipped perks (the loadout, mirrored from the relic store) */}
-        <Text style={styles.sectionCaption}>EQUIPPED PERKS</Text>
+        <Text style={[styles.sectionCaption, { color: theme.dim }]}>EQUIPPED PERKS</Text>
         {equipped.length > 0 ? (
           <View style={styles.perkRow}>
             {equipped.map(([locationId, relic]) => {
               const location = locations.find((l) => l.id === locationId);
-              const color = sealColors[relic.seal];
+              const level = levelAccent(location?.sort_order ?? 0);
+              const color = level.accent;
               return (
                 <TouchableOpacity
                   key={locationId}
-                  style={[styles.perkCard, { borderColor: color }]}
+                  style={[styles.perkCard, { borderColor: color, backgroundColor: level.card }]}
                   onPress={() => {
                     onClose();
                     router.push("/loadout" as never);
@@ -272,7 +277,7 @@ const InventoryBottomSheet = React.forwardRef<
           </View>
         ) : (
           <TouchableOpacity
-            style={styles.noPerks}
+            style={[styles.noPerks, { backgroundColor: theme.glow, borderColor: theme.faint }]}
             onPress={() => {
               onClose();
               router.push("/codex" as never);
@@ -287,20 +292,20 @@ const InventoryBottomSheet = React.forwardRef<
         )}
 
         {/* Consumables */}
-        <Text style={styles.sectionCaption}>CONSUMABLES</Text>
+        <Text style={[styles.sectionCaption, { color: theme.dim }]}>CONSUMABLES</Text>
         <View style={styles.gridContainer}>
           {ownedBoosters.map(({ item, quantity }) => (
             <TouchableOpacity
               key={item.id}
-              style={styles.gridCell}
+              style={[styles.gridCell, { backgroundColor: theme.glow, borderColor: theme.faint }]}
               activeOpacity={0.8}
               onPress={() => handleActivate(item)}
             >
               <Text style={styles.gridDuration}>
                 {Math.round((item.effect.duration_ms ?? 0) / 3_600_000)}h
               </Text>
-              <Ionicons name="hourglass-outline" size={24} color={palette.gold} />
-              <Text style={styles.gridValue}>{item.effect.value}×</Text>
+              <Ionicons name="hourglass-outline" size={24} color={theme.accent} />
+              <Text style={[styles.gridValue, { color: theme.bright }]}>{item.effect.value}×</Text>
               {quantity > 1 ? (
                 <Text style={styles.quantityBadge}>×{quantity}</Text>
               ) : null}
@@ -309,7 +314,10 @@ const InventoryBottomSheet = React.forwardRef<
           {Array.from({
             length: Math.max(0, GRID_SLOTS - ownedBoosters.length),
           }).map((_, i) => (
-            <View key={`empty-${i}`} style={[styles.gridCell, styles.gridCellEmpty]}>
+            <View
+              key={`empty-${i}`}
+              style={[styles.gridCell, styles.gridCellEmpty, { borderColor: theme.faint }]}
+            >
               <View style={styles.emptyDiamond} />
             </View>
           ))}
@@ -349,7 +357,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 32,
     height: 32,
-    backgroundColor: palette.card,
+    backgroundColor: "rgba(244, 234, 218, 0.08)",
     borderRadius: 100,
   },
   placeholderLeft: {
@@ -360,9 +368,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     width: "100%",
-    backgroundColor: palette.card,
     borderWidth: 1,
-    borderColor: palette.hairline,
     gap: 10,
     borderRadius: 14,
     paddingVertical: 12,
@@ -383,13 +389,11 @@ const styles = StyleSheet.create({
   boostTime: {
     fontSize: 11,
     fontFamily: fonts.pixel,
-    color: palette.gold,
   },
   sectionCaption: {
     fontSize: 8,
     fontFamily: fonts.pixel,
     letterSpacing: 2,
-    color: palette.goldDim,
     marginTop: 6,
   },
   perkRow: {
@@ -405,7 +409,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: palette.card,
   },
   perkDiamond: {
     width: 7,
@@ -428,10 +431,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: palette.hairline,
     borderRadius: 12,
     padding: 14,
-    backgroundColor: palette.card,
   },
   noPerksText: {
     fontSize: 13,
@@ -448,9 +449,7 @@ const styles = StyleSheet.create({
   gridCell: {
     width: "23%",
     aspectRatio: 1,
-    backgroundColor: palette.card,
     borderWidth: 1,
-    borderColor: palette.hairline,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -464,7 +463,7 @@ const styles = StyleSheet.create({
     height: 8,
     transform: [{ rotate: "45deg" }],
     borderWidth: 1,
-    borderColor: palette.hairline,
+    borderColor: "rgba(244, 234, 218, 0.14)",
   },
   gridDuration: {
     fontSize: 7,
@@ -474,7 +473,6 @@ const styles = StyleSheet.create({
   gridValue: {
     fontSize: 10,
     fontFamily: fonts.pixelBold,
-    color: palette.goldBright,
   },
   quantityBadge: {
     position: "absolute",

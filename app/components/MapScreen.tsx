@@ -2,7 +2,8 @@ import type { MapLocation } from "@/src/lib/api";
 import { api } from "@/src/lib/api";
 import { deriveLocationState, useMapStore } from "@/src/stores/useMapStore";
 import { useRelicStore } from "@/src/stores/useRelicStore";
-import { fonts, palette, sealColors } from "@/src/theme";
+import type { LevelAccent } from "@/src/theme";
+import { fonts, levelAccent, palette } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import * as Crypto from "expo-crypto";
 import { useRouter } from "expo-router";
@@ -44,6 +45,16 @@ export default function MapScreen() {
     loadLocations();
   }, [loadLocations]);
 
+  // The map shows the road travelled, where you stand, and only the next
+  // two levels — the rest stays in the fog. Once everything is cleared the
+  // whole ladder is revealed.
+  const currentSort =
+    locations.find((l) => progress[l.id]?.status === "current")?.sort_order ??
+    (locations.some((l) => progress[l.id]?.status === "completed")
+      ? Number.MAX_SAFE_INTEGER
+      : 0);
+  const visible = locations.filter((l) => l.sort_order <= currentSort + 2);
+
   const breakGate = async () => {
     setBreaking(true);
     try {
@@ -68,7 +79,7 @@ export default function MapScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Game Map</Text>
         <TouchableOpacity onPress={() => router.push('/codex' as never)} hitSlop={8}>
-          <Ionicons name="albums-outline" size={22} color={palette.goldDim} />
+          <Ionicons name="albums-outline" size={22} color={palette.textDim} />
         </TouchableOpacity>
       </View>
 
@@ -76,41 +87,43 @@ export default function MapScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {locations.map((location, index) => {
+        {visible.map((location, index) => {
           const state = deriveLocationState(location, locations, progress);
           const entry = progress[location.id];
           const boss = location.boss;
           const bossActive = state === "current" && entry?.stage === "boss" && !!boss;
           const relic = relics[location.id];
+          const level = levelAccent(location.sort_order);
+          // The two levels past the current one fade toward the fog.
+          const ahead = location.sort_order - currentSort;
+          const fade = ahead <= 0 ? 1 : ahead === 1 ? 0.55 : 0.3;
 
           return (
-            <View key={location.id}>
+            <View key={location.id} style={{ opacity: fade }}>
               <View
                 style={[
                   styles.card,
-                  state === "current" && (bossActive ? styles.cardBoss : styles.cardActive),
-                  state === "locked" && styles.cardLocked,
+                  { backgroundColor: level.card, borderColor: level.border },
+                  state === "current" &&
+                    (bossActive
+                      ? styles.cardBoss
+                      : [styles.cardActive, { borderColor: level.accent, backgroundColor: level.glow }]),
                 ]}
               >
                 <View style={styles.cardRow}>
                   <View style={styles.crestWrap}>
                     <Crest
                       size={44}
-                      progress={null}
-                      color={
-                        state === "completed" && relic
-                          ? sealColors[relic.seal]
-                          : state === "current"
-                            ? (bossActive ? palette.ember : palette.gold)
-                            : "rgba(244,234,218,0.25)"
-                      }
+                      color={bossActive ? palette.ember : level.accent}
                       dimColor="transparent"
                       glyphIndex={location.sort_order}
                       hostile={bossActive}
                     />
                   </View>
                   <View style={styles.cardCenter}>
-                    <Text style={styles.levelCaption}>LEVEL {location.sort_order + 1}</Text>
+                    <Text style={[styles.levelCaption, { color: level.dim }]}>
+                      LEVEL {location.sort_order + 1}
+                    </Text>
                     <Text
                       style={[
                         styles.levelName,
@@ -139,12 +152,13 @@ export default function MapScreen() {
                     ) : state === "current" ? (
                       <GateBody
                         location={location}
+                        level={level}
                         collected={entry?.fragmentsCollected ?? 0}
                         breaking={breaking}
                         onBreak={breakGate}
                       />
                     ) : state === "completed" ? (
-                      <Text style={[styles.subLabel, relic && { color: sealColors[relic.seal] }]}>
+                      <Text style={[styles.subLabel, relic && { color: level.accent }]}>
                         {relic
                           ? `Cleared · ${location.relic_name} claimed`
                           : "Cleared"}
@@ -161,12 +175,12 @@ export default function MapScreen() {
                   </View>
                   <View style={styles.iconWrapper}>
                     {state === "completed" ? (
-                      <Ionicons name="checkmark-circle" size={22} color={palette.gold} />
+                      <Ionicons name="checkmark-circle" size={22} color={level.accent} />
                     ) : state === "current" ? (
                       <Ionicons
                         name="chevron-forward"
                         size={20}
-                        color={bossActive ? palette.ember : palette.gold}
+                        color={bossActive ? palette.ember : level.accent}
                       />
                     ) : (
                       <Ionicons
@@ -179,7 +193,7 @@ export default function MapScreen() {
                 </View>
               </View>
 
-              {index < locations.length - 1 && <DashedConnector />}
+              {index < visible.length - 1 && <DashedConnector />}
             </View>
           );
         })}
@@ -190,11 +204,13 @@ export default function MapScreen() {
 
 function GateBody({
   location,
+  level,
   collected,
   breaking,
   onBreak,
 }: {
   location: MapLocation;
+  level: LevelAccent;
   collected: number;
   breaking: boolean;
   onBreak: () => void;
@@ -206,7 +222,10 @@ function GateBody({
     <>
       <View style={styles.progressTrack}>
         <View
-          style={[styles.fragmentFill, { width: `${(collected / required) * 100}%` }]}
+          style={[
+            styles.fragmentFill,
+            { width: `${(collected / required) * 100}%`, backgroundColor: level.accent },
+          ]}
         />
       </View>
       <Text style={styles.subLabel}>
@@ -215,12 +234,12 @@ function GateBody({
       </Text>
       {ready ? (
         <TouchableOpacity
-          style={styles.advanceButton}
+          style={[styles.advanceButton, { borderColor: level.accent, backgroundColor: level.buttonBottom }]}
           onPress={onBreak}
           disabled={breaking}
           activeOpacity={0.8}
         >
-          <Text style={styles.advanceButtonText}>{location.gate_label}</Text>
+          <Text style={[styles.advanceButtonText, { color: level.bright }]}>{location.gate_label}</Text>
         </TouchableOpacity>
       ) : (
         <Text style={styles.hintLabel}>Focus to collect fragments</Text>
@@ -253,24 +272,17 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   card: {
-    backgroundColor: palette.card,
     borderRadius: 16,
     padding: 18,
     borderWidth: 1,
-    borderColor: palette.hairline,
   },
   cardActive: {
-    borderColor: palette.gold,
     borderWidth: 1.5,
-    backgroundColor: "#20150A",
   },
   cardBoss: {
     borderColor: palette.emberBorder,
     borderWidth: 1.5,
     backgroundColor: palette.emberCard,
-  },
-  cardLocked: {
-    opacity: 0.6,
   },
   cardRow: {
     flexDirection: "row",
@@ -290,7 +302,6 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontFamily: fonts.pixel,
     letterSpacing: 2,
-    color: palette.goldDim,
   },
   levelName: {
     fontSize: 16,
@@ -308,7 +319,6 @@ const styles = StyleSheet.create({
   },
   fragmentFill: {
     height: "100%",
-    backgroundColor: palette.gold,
     borderRadius: 5,
   },
   bossFill: {
@@ -328,15 +338,12 @@ const styles = StyleSheet.create({
   },
   advanceButton: {
     marginTop: 4,
-    backgroundColor: "#2A1B06",
-    borderColor: palette.gold,
     borderWidth: 1,
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 20,
   },
   advanceButtonText: {
-    color: palette.goldBright,
     fontSize: 14,
     fontFamily: fonts.ui,
   },
@@ -353,6 +360,6 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 2,
-    backgroundColor: palette.goldDim,
+    backgroundColor: 'rgba(244, 234, 218, 0.3)',
   },
 });

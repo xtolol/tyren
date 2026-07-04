@@ -4,7 +4,7 @@ import {
 } from "@/src/core/relics";
 import { useMapStore } from "@/src/stores/useMapStore";
 import { equippedRelics, useRelicStore } from "@/src/stores/useRelicStore";
-import { fonts, palette, sealColors, sealColorsDim } from "@/src/theme";
+import { fonts, levelAccent, palette } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -19,6 +19,8 @@ import {
 
 // The perk loadout (design Q2): two equipped slots up top, every perk from
 // any owned relic below. Locked rows are relics still waiting on the map.
+// Tapping a slot or row opens that relic's detail page (its seal journey
+// lives there, not on Home); the EQUIP/EQUIPPED badge is the toggle.
 
 export default function LoadoutScreen() {
   const router = useRouter();
@@ -55,6 +57,9 @@ export default function LoadoutScreen() {
     }
   };
 
+  const openRelic = (locationId: string) =>
+    router.push({ pathname: "/relic/[id]", params: { id: locationId } } as never);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -84,17 +89,17 @@ export default function LoadoutScreen() {
             }
             const [locationId, relic] = entry;
             const location = locations.find((l) => l.id === locationId);
-            const color = sealColors[relic.seal];
+            const level = levelAccent(location?.sort_order ?? 0);
             return (
               <TouchableOpacity
                 key={locationId}
-                style={[styles.slot, { borderColor: color }]}
-                onPress={() => toggle(locationId)}
+                style={[styles.slot, { borderColor: level.accent, backgroundColor: level.card }]}
+                onPress={() => openRelic(locationId)}
                 activeOpacity={0.8}
               >
-                <View style={[styles.diamond, { backgroundColor: color }]} />
+                <View style={[styles.diamond, { backgroundColor: level.accent }]} />
                 <Text style={styles.slotName}>{location?.perk_name ?? "Perk"}</Text>
-                <Text style={[styles.slotMeta, { color }]}>
+                <Text style={[styles.slotMeta, { color: level.accent }]}>
                   L{(location?.sort_order ?? 0) + 1} · {formatPerkBonus(relic.seal)}
                 </Text>
               </TouchableOpacity>
@@ -107,18 +112,22 @@ export default function LoadoutScreen() {
           {locations.map((location) => {
             const relic = relics[location.id];
             const isEquipped = relic?.equippedSlot != null;
-            const color = relic ? sealColors[relic.seal] : palette.textFaint;
+            const level = levelAccent(location.sort_order);
+            const color = relic ? level.accent : palette.textFaint;
 
             return (
               <TouchableOpacity
                 key={location.id}
                 style={[
                   styles.row,
-                  relic && isEquipped && { borderColor: sealColorsDim[relic.seal] },
+                  {
+                    backgroundColor: level.card,
+                    borderColor: isEquipped ? level.border : level.faint,
+                  },
                   !relic && styles.rowLocked,
                 ]}
-                disabled={!relic || busy}
-                onPress={() => toggle(location.id)}
+                disabled={!relic}
+                onPress={() => openRelic(location.id)}
                 activeOpacity={0.8}
               >
                 <View style={[styles.diamond, { backgroundColor: color }]} />
@@ -132,13 +141,17 @@ export default function LoadoutScreen() {
                   </Text>
                 </View>
                 {relic ? (
-                  <View
+                  <TouchableOpacity
                     style={[
                       styles.badge,
                       isEquipped
                         ? { backgroundColor: color }
-                        : { borderColor: palette.hairline, borderWidth: 1 },
+                        : { borderColor: level.border, borderWidth: 1 },
                     ]}
+                    onPress={() => toggle(location.id)}
+                    disabled={busy}
+                    hitSlop={10}
+                    activeOpacity={0.7}
                   >
                     <Text
                       style={[
@@ -148,7 +161,7 @@ export default function LoadoutScreen() {
                     >
                       {isEquipped ? "EQUIPPED" : "EQUIP"}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 ) : (
                   <Text style={styles.lockedText}>LOCKED</Text>
                 )}
@@ -188,7 +201,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontFamily: fonts.pixel,
     letterSpacing: 2,
-    color: palette.goldDim,
+    color: palette.textDim,
     marginTop: 10,
   },
   slotRow: {
@@ -202,10 +215,9 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     alignItems: "center",
     gap: 6,
-    backgroundColor: palette.card,
   },
   slotEmpty: {
-    borderColor: palette.hairline,
+    borderColor: 'rgba(244, 234, 218, 0.14)',
     borderStyle: "dashed",
     justifyContent: "center",
   },
@@ -237,14 +249,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     borderWidth: 1,
-    borderColor: palette.hairline,
     borderRadius: 14,
     padding: 16,
-    backgroundColor: palette.card,
   },
   rowLocked: {
     opacity: 0.6,
-    backgroundColor: palette.bgRaised,
   },
   rowText: {
     flex: 1,
