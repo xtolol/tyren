@@ -114,7 +114,9 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-back" size={28} color={palette.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.accent }]}>TYREN</Text>
-          <View style={{ width: 28 }} />
+          <TouchableOpacity onPress={() => router.push('/settings' as never)} hitSlop={8}>
+            <Ionicons name="settings-outline" size={22} color={palette.textDim} />
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.resultsTitle}>Your Results</Text>

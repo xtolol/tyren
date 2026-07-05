@@ -1,10 +1,12 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { useSettingsStore } from '../stores/useSettingsStore';
 
 // Local notifications only (no push): a warning while a live session is
 // about to break in the background, and an evening nudge when a streak
 // is at risk. Scheduling is gated on already-granted permission — the
-// only prompt happens contextually, on the first session start.
+// only prompt happens contextually, on the first session start — and on
+// the user's toggles in the settings store.
 
 const SESSION_BREAK_ID = 'session-break';
 const STREAK_REMINDER_ID = 'streak-reminder';
@@ -52,6 +54,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
 // Fires if the user stays away past the leave grace while a session is
 // running; cancelled the moment they come back in time.
 export async function scheduleSessionBreakWarning() {
+  if (!useSettingsStore.getState().breakWarningEnabled) return;
   if (!(await hasPermission())) return;
   try {
     await Notifications.scheduleNotificationAsync({
@@ -78,6 +81,14 @@ export async function cancelSessionBreakWarning() {
   }
 }
 
+export async function cancelStreakReminder() {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(STREAK_REMINDER_ID);
+  } catch {
+    // Nothing scheduled
+  }
+}
+
 function localDateString(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -95,6 +106,7 @@ export async function scheduleStreakReminder(args: {
     // Nothing scheduled
   }
   const { streak, lastFocusDate } = args;
+  if (!useSettingsStore.getState().streakReminderEnabled) return;
   if (streak <= 0 || !(await hasPermission())) return;
 
   const now = new Date();

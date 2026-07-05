@@ -352,13 +352,12 @@ const styles = StyleSheet.create({
     height: 48,
   },
   closeButton: {
-    padding: 8,
     alignItems: "center",
     justifyContent: "center",
     width: 32,
     height: 32,
     backgroundColor: "rgba(244, 234, 218, 0.08)",
-    borderRadius: 100,
+    borderRadius: 16,
   },
   placeholderLeft: {
     width: 32,
@@ -448,7 +447,7 @@ const styles = StyleSheet.create({
   },
   gridCell: {
     width: "23%",
-    aspectRatio: 1,
+    height: 80,
     borderWidth: 1,
     borderRadius: 12,
     alignItems: "center",

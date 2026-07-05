@@ -490,13 +490,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.serif,
   },
   closeButton: {
-    padding: 8,
     alignItems: "center",
     justifyContent: "center",
     width: 32,
     height: 32,
     backgroundColor: "rgba(244, 234, 218, 0.08)",
-    borderRadius: 100,
+    borderRadius: 16,
   },
   placeholderLeft: {
     width: 32,

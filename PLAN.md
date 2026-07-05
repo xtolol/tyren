@@ -305,8 +305,10 @@ relic-crest cards, procedural SVG — no illustrator), extended with the **Relic
   toggles). Home shows just the equipped perk chips + total multiplier.
 
 ### Follow-ups
-- [ ] Settings screen from the design set (blocked apps, session length,
-  auto-start, notifications toggles) — most rows need Track B / notification prefs.
+- [x] Settings screen scaffolded (2026-07-05, `app/settings.tsx`, gear on the
+  profile header): notification toggles are live (gating the Phase 5 local
+  notifications via `useSettingsStore`), default-session-length + auto-start
+  are saved for the target-session UI, blocked apps sits locked until Track B.
 - [ ] In-app smoke test on a device (start/stop, relic moment, loadout swap).
 - [ ] Target-session UI (server supports `mode: 'target'`; Home only starts freeform).
 - [ ] Retune seal thresholds (3/6/12) and level-item prices after playtesting —

@@ -17,6 +17,9 @@ interface PlayerStore {
   currentStreak: number;
   longestStreak: number;
   streakFreezes: number;
+  // The server's user-local focus day that last satisfied the streak —
+  // used to (re)schedule the streak reminder from settings.
+  lastFocusDate: string | null;
   // item_id → quantity owned; server-authoritative, mirrored on sync
   inventory: Record<string, number>;
   activeBoosts: ActiveBoost[];
@@ -39,6 +42,7 @@ interface PlayerStore {
     total_bosses_defeated: number;
     current_streak: number; longest_streak: number;
     streak_freezes: number;
+    last_focus_date?: string | null;
   }) => void;
   applySessionResult: (result: {
     dust: number; shards: number; level: number; new_xp: number;
@@ -47,6 +51,7 @@ interface PlayerStore {
     current_streak: number; longest_streak: number;
     streak_freezes: number;
     total_bosses_defeated: number;
+    streak_focus_date?: string | null;
   }) => void;
   setInventoryState: (inventory: InventoryEntry[], boosts: ActiveBoost[]) => void;
   setEntitlements: (entitlements: Entitlement[]) => void;
@@ -74,6 +79,7 @@ export const usePlayerStore = create<PlayerStore>()(
       currentStreak: 0,
       longestStreak: 0,
       streakFreezes: 0,
+      lastFocusDate: null,
       inventory: {},
       activeBoosts: [],
       entitlements: [],
@@ -127,6 +133,7 @@ export const usePlayerStore = create<PlayerStore>()(
           currentStreak: profile.current_streak,
           longestStreak: profile.longest_streak,
           streakFreezes: profile.streak_freezes,
+          lastFocusDate: profile.last_focus_date ?? null,
         });
       },
 
@@ -143,6 +150,9 @@ export const usePlayerStore = create<PlayerStore>()(
           longestStreak: result.longest_streak,
           streakFreezes: result.streak_freezes,
           totalBossesDefeated: result.total_bosses_defeated,
+          ...(result.streak_focus_date !== undefined
+            ? { lastFocusDate: result.streak_focus_date }
+            : {}),
         });
       },
 
@@ -199,6 +209,7 @@ export const usePlayerStore = create<PlayerStore>()(
           xpToNextLevel: XP_PER_LEVEL, progressPercent: 0,
           totalFocusTimeMs: 0, totalItemsBought: 0, totalBossesDefeated: 0,
           currentStreak: 0, longestStreak: 0, streakFreezes: 0,
+          lastFocusDate: null,
           inventory: {}, activeBoosts: [], entitlements: [], weeklyRecap: null,
         });
       },
